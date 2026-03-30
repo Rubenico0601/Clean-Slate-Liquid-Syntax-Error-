@@ -337,12 +337,12 @@ class LiquidLinter {
     }
 
     // Check for incomplete comparisons — operator at end with no right-hand value
-    // Matches: == , != , > , < , >= , <= at the end of the condition (with optional trailing whitespace)
     const incompleteOp = condition.match(/(==|!=|>=|<=|>|<)\s*$/);
     if (incompleteOp) {
       this.addDiagnostic(token.line, token.col, 'error',
         `Incomplete comparison — \`${incompleteOp[1]}\` is missing a value on the right side. ` +
-        `Example: \`variable ${incompleteOp[1]} "value"\`.`);
+        `Example: \`variable ${incompleteOp[1]} "value"\`.`,
+        { fixType: 'prompt_condition_value', operator: incompleteOp[1], tagName, token });
     }
 
     // Check for operator with no left-hand value (operator at start)
@@ -460,6 +460,16 @@ class LiquidLinter {
     }
   }
 
+  // Filters that require an argument after the colon
+  static get FILTERS_REQUIRING_ARGS() {
+    return new Set([
+      'default', 'date', 'append', 'prepend', 'replace', 'replace_first',
+      'remove', 'remove_first', 'split', 'truncate', 'truncatewords',
+      'slice', 'at_most', 'at_least', 'divided_by', 'minus', 'modulo',
+      'plus', 'times', 'join', 'map', 'where', 'concat',
+    ]);
+  }
+
   validateFilter(filterExpr, token, _index) {
     if (!filterExpr) {
       this.addDiagnostic(token.line, token.col, 'error',
@@ -490,6 +500,25 @@ class LiquidLinter {
       this.addDiagnostic(token.line, token.col, 'error',
         `Filter \`${filterName}\` arguments must follow a colon. ` +
         `Expected: \`${filterName}: argument\`.`);
+    }
+
+    // Check for colon with empty/missing argument value
+    if (afterName.startsWith(':')) {
+      const argValue = afterName.substring(1).trim();
+      if (!argValue) {
+        this.addDiagnostic(token.line, token.col, 'error',
+          `Filter \`${filterName}\` has a colon but no value after it. ` +
+          `Expected: \`${filterName}: value\`.`,
+          { fixType: 'prompt_filter_value', filterName, token });
+      }
+    }
+
+    // Check for filters that require arguments but have none
+    if (!afterName && LiquidLinter.FILTERS_REQUIRING_ARGS.has(filterName)) {
+      this.addDiagnostic(token.line, token.col, 'error',
+        `Filter \`${filterName}\` requires an argument. ` +
+        `Expected: \`${filterName}: value\`.`,
+        { fixType: 'prompt_filter_value', filterName, token });
     }
   }
 
@@ -619,7 +648,8 @@ class LiquidLinter {
       const closer = this.blockTags[unclosed.tagName];
       this.addDiagnostic(unclosed.token.line, unclosed.token.col, 'error',
         `\`{% ${unclosed.tagName} %}\` on line ${unclosed.token.line} is never closed — ` +
-        `add \`{% ${closer} %}\` to close it.`);
+        `add \`{% ${closer} %}\` to close it.`,
+        { fixType: 'insert_closing_tag', closingTag: `{% ${closer} %}`, afterLine: null, tagName: unclosed.tagName, token: unclosed.token });
     }
   }
 
@@ -803,10 +833,66 @@ class LiquidLinter {
     return dp[m][n];
   }
 
+  // ─── Property Extraction ─────────────────────────────────────
+
+  extractProperties(source) {
+    const profileProps = new Map(); // name -> Set of lines
+    const eventProps = new Map();
+
+    const lines = source.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const lineNum = i + 1;
+
+      // Match Profile.PropName or Profile["Prop Name"]
+      const profileDot = line.matchAll(/\bProfile\.(\w+(?:\.\w+)*)/g);
+      for (const m of profileDot) {
+        const prop = m[1];
+        if (!profileProps.has(prop)) profileProps.set(prop, new Set());
+        profileProps.get(prop).add(lineNum);
+      }
+
+      const profileBracket = line.matchAll(/\bProfile\["([^"]+)"\]/g);
+      for (const m of profileBracket) {
+        const prop = m[1];
+        if (!profileProps.has(prop)) profileProps.set(prop, new Set());
+        profileProps.get(prop).add(lineNum);
+      }
+
+      // Match Event.PropName or Event["Prop Name"]
+      const eventDot = line.matchAll(/\bEvent\.(\w+(?:\.\w+)*)/g);
+      for (const m of eventDot) {
+        const prop = m[1];
+        if (!eventProps.has(prop)) eventProps.set(prop, new Set());
+        eventProps.get(prop).add(lineNum);
+      }
+
+      const eventBracket = line.matchAll(/\bEvent\["([^"]+)"\]/g);
+      for (const m of eventBracket) {
+        const prop = m[1];
+        if (!eventProps.has(prop)) eventProps.set(prop, new Set());
+        eventProps.get(prop).add(lineNum);
+      }
+    }
+
+    return {
+      profile: [...profileProps.entries()].map(([name, lines]) => ({
+        name,
+        lines: [...lines],
+      })),
+      event: [...eventProps.entries()].map(([name, lines]) => ({
+        name,
+        lines: [...lines],
+      })),
+    };
+  }
+
   // ─── Diagnostic Helpers ─────────────────────────────────────
 
-  addDiagnostic(line, col, severity, message) {
-    this.diagnostics.push({ line, col, severity, message });
+  addDiagnostic(line, col, severity, message, fix) {
+    const d = { line, col, severity, message };
+    if (fix) d.fix = fix;
+    this.diagnostics.push(d);
   }
 
   dedup(diagnostics) {
