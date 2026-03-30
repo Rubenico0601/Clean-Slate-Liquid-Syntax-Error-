@@ -143,6 +143,9 @@ Today is {{ greeting }}.
       propsToggle.textContent = propsPanel.classList.contains('collapsed') ? 'Show Properties' : 'Hide Properties';
     });
 
+    // Converter button
+    document.getElementById('btn-convert').addEventListener('click', runConversion);
+
     // Initial lint if editor has content
     if (editor.getValue().trim()) {
       runLint();
@@ -550,6 +553,144 @@ Today is {{ greeting }}.
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+  }
+
+  // ─── Leanplum Converter ───────────────────────────────────
+  function runConversion() {
+    const source = editor.getValue();
+    if (!source.trim()) {
+      showConversionReport(null, 'Paste a Leanplum template in the editor first.');
+      return;
+    }
+
+    // Quick detection: does this look like a Leanplum template?
+    const hasLeanplumSyntax = /(\{#|{% *set |userAttribute\.|linkedData\.|skipmessage\(\)|\| *length\b|\| *string\b|\|\s*\w+\([^)]*\))/.test(source);
+
+    if (!hasLeanplumSyntax) {
+      showConversionReport(null, 'This template doesn\'t appear to contain Leanplum-specific syntax. It may already be CleverTap-compatible. Convert anyway?', () => {
+        executeConversion(source);
+      });
+      return;
+    }
+
+    executeConversion(source);
+  }
+
+  function executeConversion(source) {
+    const converter = new LeanplumConverter();
+    const result = converter.convert(source);
+    showConversionReport(result);
+  }
+
+  function showConversionReport(result, message, onConfirm) {
+    const existing = document.getElementById('convert-modal');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'convert-modal';
+    overlay.className = 'modal-overlay';
+
+    // No result — just a message
+    if (!result) {
+      overlay.innerHTML = `
+        <div class="modal-box convert-report">
+          <div class="modal-title">Leanplum &rarr; CleverTap Converter</div>
+          <div class="modal-desc">${escapeHtml(message || '')}</div>
+          <div class="modal-actions">
+            <button class="btn modal-cancel">Close</button>
+            ${onConfirm ? '<button class="btn btn-accent modal-submit">Convert Anyway</button>' : ''}
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(overlay);
+      const cancelBtn = overlay.querySelector('.modal-cancel');
+      cancelBtn.addEventListener('click', () => { overlay.remove(); editor.focus(); });
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) { overlay.remove(); editor.focus(); } });
+
+      if (onConfirm) {
+        const confirmBtn = overlay.querySelector('.modal-submit');
+        confirmBtn.addEventListener('click', () => { overlay.remove(); onConfirm(); });
+      }
+      return;
+    }
+
+    // Build the report
+    const totalAutoChanges = result.changes.reduce((sum, c) => sum + (c.count || 1), 0);
+    const totalWarnings = result.warnings.length;
+
+    let changesHtml = '';
+    if (result.changes.length > 0) {
+      changesHtml = result.changes.map(c => `
+        <div class="convert-item convert-auto">
+          <span class="convert-badge convert-badge-auto">AUTO</span>
+          <span class="convert-category">${escapeHtml(c.category)}</span>
+          <span class="convert-desc">${escapeHtml(c.description)}</span>
+        </div>
+      `).join('');
+    }
+
+    let warningsHtml = '';
+    if (result.warnings.length > 0) {
+      warningsHtml = result.warnings.map(w => `
+        <div class="convert-item convert-manual">
+          <span class="convert-badge convert-badge-${w.severity}">MANUAL${w.severity === 'high' ? ' - HIGH' : w.severity === 'medium' ? ' - MED' : ''}</span>
+          <span class="convert-category">${escapeHtml(w.category)}</span>
+          <span class="convert-desc">${escapeHtml(w.description)}</span>
+        </div>
+      `).join('');
+    }
+
+    const noChanges = result.changes.length === 0 && result.warnings.length === 0;
+
+    overlay.innerHTML = `
+      <div class="modal-box convert-report">
+        <div class="modal-title">Leanplum &rarr; CleverTap — Conversion Report</div>
+
+        <div class="convert-summary">
+          <div class="convert-stat">
+            <span class="convert-stat-value convert-stat-auto">${totalAutoChanges}</span>
+            <span class="convert-stat-label">Auto-converted</span>
+          </div>
+          <div class="convert-stat">
+            <span class="convert-stat-value convert-stat-manual">${totalWarnings}</span>
+            <span class="convert-stat-label">Needs manual review</span>
+          </div>
+        </div>
+
+        ${noChanges ? '<div class="convert-empty">No Leanplum-specific syntax detected. Template may already be compatible.</div>' : ''}
+
+        <div class="convert-list">
+          ${changesHtml}
+          ${warningsHtml}
+        </div>
+
+        <div class="modal-actions">
+          <button class="btn modal-cancel">Cancel</button>
+          <button class="btn btn-accent modal-submit">${noChanges ? 'Close' : 'Apply Conversion'}</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const cancelBtn = overlay.querySelector('.modal-cancel');
+    const applyBtn = overlay.querySelector('.modal-submit');
+
+    function close() {
+      overlay.remove();
+      editor.focus();
+    }
+
+    cancelBtn.addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+    applyBtn.addEventListener('click', () => {
+      if (!noChanges) {
+        editor.setValue(result.output);
+      }
+      close();
+    });
   }
 
   // ─── Boot ─────────────────────────────────────────────────
