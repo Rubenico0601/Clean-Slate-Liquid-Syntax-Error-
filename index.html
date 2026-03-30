@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CleanSlate — CleverTap</title>
+  <meta name="description" content="Find and fix Liquid template errors with precise line numbers and actionable messages. Built for CleverTap's LiqP 0.7.9 engine.">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- CodeMirror -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/theme/material-darker.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/display/placeholder.min.css">
+
+  <!-- App styles -->
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div class="app">
+
+    <!-- ─── Header ──────────────────────────────────────── -->
+    <header class="header">
+      <div class="header-left">
+        <div class="logo"><span>&lt;/&gt;</span> CleanSlate</div>
+        <span class="tag">CleverTap &middot; LiqP 0.7.9</span>
+      </div>
+
+      <div class="header-center">
+        <div class="stat">
+          <span class="stat-dot red"></span>
+          <span>Errors:</span>
+          <span class="stat-value" id="error-count">0</span>
+        </div>
+        <div class="stat">
+          <span class="stat-dot yellow"></span>
+          <span>Warnings:</span>
+          <span class="stat-value" id="warning-count">0</span>
+        </div>
+        <span class="status-badge status-ok" id="status-badge">No Issues</span>
+      </div>
+
+      <div class="header-right">
+        <button class="btn" id="btn-sample">Valid Sample</button>
+        <button class="btn btn-danger" id="btn-broken-sample">Broken Sample</button>
+        <button class="btn" id="btn-clear">Clear</button>
+      </div>
+    </header>
+
+    <!-- ─── Main ────────────────────────────────────────── -->
+    <main class="main">
+
+      <!-- Editor -->
+      <section class="editor-panel">
+        <div class="panel-header">
+          <span class="panel-title">Template Editor</span>
+          <span>Paste or type your Liquid template</span>
+        </div>
+        <div class="editor-wrap">
+          <textarea id="editor-textarea"></textarea>
+        </div>
+      </section>
+
+      <!-- Results -->
+      <aside class="results-panel">
+
+        <!-- Errors -->
+        <section class="errors-section">
+          <div class="panel-header">
+            <span class="panel-title">Diagnostics</span>
+            <button class="btn" id="btn-copy-errors">Copy Errors</button>
+          </div>
+          <div class="errors-scroll" id="errors-body">
+            <div class="no-errors">
+              <div class="no-errors-icon">&#10003;</div>
+              <div class="no-errors-text">Paste a Liquid template in the editor to check for errors.</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Quick Reference -->
+        <section class="reference-section" id="ref-panel">
+          <div class="panel-header">
+            <span class="panel-title">Quick Reference</span>
+            <button class="btn" id="ref-toggle">Hide Reference</button>
+          </div>
+          <div class="ref-content">
+
+            <div class="ref-group">
+              <div class="ref-group-title">Block Tags</div>
+              <div class="ref-tags">
+                <span class="ref-tag">if / elsif / else / endif</span>
+                <span class="ref-tag">unless / endunless</span>
+                <span class="ref-tag">for / endfor</span>
+                <span class="ref-tag">case / when / endcase</span>
+                <span class="ref-tag">comment / endcomment</span>
+                <span class="ref-tag">raw / endraw</span>
+                <span class="ref-tag">tablerow / endtablerow</span>
+                <span class="ref-tag">capture / endcapture</span>
+              </div>
+            </div>
+
+            <div class="ref-group">
+              <div class="ref-group-title">Standalone Tags</div>
+              <div class="ref-tags">
+                <span class="ref-tag">assign</span>
+                <span class="ref-tag">increment</span>
+                <span class="ref-tag">decrement</span>
+                <span class="ref-tag">abort</span>
+                <span class="ref-tag">break</span>
+                <span class="ref-tag">continue</span>
+              </div>
+            </div>
+
+            <div class="ref-group">
+              <div class="ref-group-title">Operators</div>
+              <div class="ref-tags">
+                <span class="ref-tag">==</span>
+                <span class="ref-tag">!=</span>
+                <span class="ref-tag">&gt;</span>
+                <span class="ref-tag">&lt;</span>
+                <span class="ref-tag">&gt;=</span>
+                <span class="ref-tag">&lt;=</span>
+                <span class="ref-tag">and</span>
+                <span class="ref-tag">or</span>
+                <span class="ref-tag">contains</span>
+              </div>
+            </div>
+
+            <div class="ref-group">
+              <div class="ref-group-title">CleverTap Objects</div>
+              <div class="ref-tags">
+                <span class="ref-tag">Profile.PropertyName</span>
+                <span class="ref-tag">Event.PropertyName</span>
+                <span class="ref-tag">Event["Property Name"]</span>
+              </div>
+            </div>
+
+            <div class="ref-group">
+              <div class="ref-group-title">Common Filters</div>
+              <div class="ref-tags">
+                <span class="ref-tag">default</span>
+                <span class="ref-tag">date</span>
+                <span class="ref-tag">upcase</span>
+                <span class="ref-tag">downcase</span>
+                <span class="ref-tag">capitalize</span>
+                <span class="ref-tag">append</span>
+                <span class="ref-tag">prepend</span>
+                <span class="ref-tag">replace</span>
+                <span class="ref-tag">split</span>
+                <span class="ref-tag">strip</span>
+                <span class="ref-tag">truncate</span>
+                <span class="ref-tag">size</span>
+                <span class="ref-tag">plus</span>
+                <span class="ref-tag">minus</span>
+                <span class="ref-tag">times</span>
+                <span class="ref-tag">divided_by</span>
+                <span class="ref-tag">round</span>
+                <span class="ref-tag">abs</span>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+      </aside>
+    </main>
+  </div>
+
+  <!-- CodeMirror JS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/display/placeholder.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/edit/matchbrackets.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/edit/closebrackets.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/selection/active-line.min.js"></script>
+
+  <!-- Simple Liquid mode (highlight tags) -->
+  <script>
+    CodeMirror.defineMode('liquid', function () {
+      return {
+        startState: function () {
+          return { inTag: false, inOutput: false, inString: false, stringChar: null };
+        },
+        token: function (stream, state) {
+          // Inside a string
+          if (state.inString) {
+            while (!stream.eol()) {
+              var ch = stream.next();
+              if (ch === '\\') { stream.next(); continue; }
+              if (ch === state.stringChar) {
+                state.inString = false;
+                return 'string';
+              }
+            }
+            return 'string';
+          }
+
+          // Inside {% ... %}
+          if (state.inTag) {
+            if (stream.match('%}') || stream.match('-%}')) {
+              state.inTag = false;
+              return 'tag bracket';
+            }
+            if (stream.match(/"/) || stream.match(/'/)) {
+              state.inString = true;
+              state.stringChar = stream.current();
+              return 'string';
+            }
+            if (stream.match(/\b(if|elsif|else|endif|unless|endunless|for|endfor|case|when|endcase|comment|endcomment|raw|endraw|assign|capture|endcapture|tablerow|endtablerow|break|continue|abort|increment|decrement|limit|offset|reversed)\b/)) {
+              return 'keyword';
+            }
+            if (stream.match(/\b(and|or|contains|in)\b/)) {
+              return 'operator';
+            }
+            if (stream.match(/[=!<>]=?/)) {
+              return 'operator';
+            }
+            if (stream.match(/\b(true|false|nil|null|blank|empty)\b/)) {
+              return 'atom';
+            }
+            if (stream.match(/\b(Profile|Event)\b/)) {
+              return 'variable-2';
+            }
+            if (stream.match(/\d+(\.\d+)?/)) {
+              return 'number';
+            }
+            stream.next();
+            return 'variable';
+          }
+
+          // Inside {{ ... }}
+          if (state.inOutput) {
+            if (stream.match('}}') || stream.match('-}}')) {
+              state.inOutput = false;
+              return 'tag bracket';
+            }
+            if (stream.match(/"/) || stream.match(/'/)) {
+              state.inString = true;
+              state.stringChar = stream.current();
+              return 'string';
+            }
+            if (stream.match(/\|/)) {
+              return 'operator';
+            }
+            if (stream.match(/\b(default|date|upcase|downcase|capitalize|append|prepend|replace|replace_first|remove|remove_first|split|strip|lstrip|rstrip|strip_html|strip_newlines|truncate|truncatewords|escape|url_encode|url_decode|newline_to_br|abs|at_most|at_least|ceil|divided_by|floor|minus|modulo|plus|round|times|compact|concat|first|join|last|map|reverse|size|sort|sort_natural|uniq|where|json|slice|base64_encode|base64_decode)\b/)) {
+              return 'builtin';
+            }
+            if (stream.match(/\b(Profile|Event)\b/)) {
+              return 'variable-2';
+            }
+            if (stream.match(/\b(true|false|nil|null|blank|empty)\b/)) {
+              return 'atom';
+            }
+            if (stream.match(/\d+(\.\d+)?/)) {
+              return 'number';
+            }
+            stream.next();
+            return 'variable';
+          }
+
+          // Look for tag/output start
+          if (stream.match('{%-') || stream.match('{%')) {
+            state.inTag = true;
+            return 'tag bracket';
+          }
+          if (stream.match('{{-') || stream.match('{{')) {
+            state.inOutput = true;
+            return 'tag bracket';
+          }
+
+          // Plain text
+          while (stream.next() != null && !stream.match(/\{[{%]/, false)) {}
+          return null;
+        }
+      };
+    });
+  </script>
+
+  <!-- App -->
+  <script src="js/liquid-linter.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
