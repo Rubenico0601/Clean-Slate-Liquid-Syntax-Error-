@@ -20,11 +20,13 @@
   let clearBtn;
   let sampleBtn;
   let copyBtn;
-  let refToggle;
-  let refPanel;
   let propsBody;
   let propsToggle;
   let propsPanel;
+
+  // Builder state
+  let currentPattern = null;
+  let builderOutput;
 
   // ─── Sample template ──────────────────────────────────────
   const SAMPLE_TEMPLATE = `{% if Profile.customer_type == "premium" %}
@@ -87,11 +89,10 @@ Today is {{ greeting }}.
     clearBtn = document.getElementById('btn-clear');
     sampleBtn = document.getElementById('btn-sample');
     copyBtn = document.getElementById('btn-copy-errors');
-    refToggle = document.getElementById('ref-toggle');
-    refPanel = document.getElementById('ref-panel');
     propsBody = document.getElementById('props-body');
     propsToggle = document.getElementById('props-toggle');
     propsPanel = document.getElementById('props-panel');
+    builderOutput = document.getElementById('builder-output');
 
     // Init CodeMirror
     editor = CodeMirror.fromTextArea(document.getElementById('editor-textarea'), {
@@ -133,11 +134,6 @@ Today is {{ greeting }}.
 
     copyBtn.addEventListener('click', copyErrors);
 
-    refToggle.addEventListener('click', () => {
-      refPanel.classList.toggle('collapsed');
-      refToggle.textContent = refPanel.classList.contains('collapsed') ? 'Show Reference' : 'Hide Reference';
-    });
-
     propsToggle.addEventListener('click', () => {
       propsPanel.classList.toggle('collapsed');
       propsToggle.textContent = propsPanel.classList.contains('collapsed') ? 'Show Properties' : 'Hide Properties';
@@ -146,10 +142,379 @@ Today is {{ greeting }}.
     // Converter button
     document.getElementById('btn-convert').addEventListener('click', runConversion);
 
+    // Tab switching
+    initTabs();
+
+    // Builder
+    initBuilder();
+
     // Initial lint if editor has content
     if (editor.getValue().trim()) {
       runLint();
     }
+  }
+
+  // ─── Tab Switching ────────────────────────────────────────
+  function initTabs() {
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+    const linterStats = document.getElementById('linter-stats');
+    const linterActions = document.getElementById('linter-actions');
+
+    tabBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tabId = btn.dataset.tab;
+
+        // Update buttons
+        tabBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        // Update content
+        tabContents.forEach(tc => tc.classList.remove('active'));
+        document.getElementById('tab-' + tabId).classList.add('active');
+
+        // Show/hide linter-specific header elements
+        const isLinter = tabId === 'linter';
+        linterStats.style.display = isLinter ? '' : 'none';
+        linterActions.style.display = isLinter ? '' : 'none';
+
+        // CodeMirror needs refresh after becoming visible
+        if (isLinter) {
+          setTimeout(() => editor.refresh(), 10);
+        }
+      });
+    });
+  }
+
+  // ─── Builder ──────────────────────────────────────────────
+  function initBuilder() {
+    const categoriesEl = document.getElementById('builder-categories');
+    const formEl = document.getElementById('builder-form');
+    const fieldsEl = document.getElementById('builder-fields');
+    const backBtn = document.getElementById('builder-back');
+    const generateBtn = document.getElementById('builder-generate');
+    const copyBtnB = document.getElementById('builder-copy');
+    const sendBtn = document.getElementById('builder-send');
+    const patternNameEl = document.getElementById('builder-pattern-name');
+
+    // ── API Key management ──
+    const apiKeyInput = document.getElementById('builder-api-key');
+    const apiConfigEl = document.getElementById('builder-api-config');
+    const apiToggleBtn = document.getElementById('builder-api-toggle');
+    const apiSaveBtn = document.getElementById('builder-api-save');
+    const apiClearBtn = document.getElementById('builder-api-clear');
+    const apiDot = document.getElementById('api-dot');
+    const apiStatusText = document.getElementById('api-status-text');
+    const promptInput = document.getElementById('builder-prompt');
+    const promptSendBtn = document.getElementById('builder-prompt-send');
+
+    // Default embedded API key
+    const DEFAULT_API_KEY = 'AIzaSyD_9MSKAdJtnsOIMRe0ATt89dxQBMFKcLI';
+
+    function getApiKey() {
+      return localStorage.getItem('cleanslate_api_key') || DEFAULT_API_KEY;
+    }
+
+    function updateApiStatus() {
+      const customKey = localStorage.getItem('cleanslate_api_key');
+      apiDot.classList.add('connected');
+      apiStatusText.textContent = customKey ? 'Custom API key' : 'Ready (built-in key)';
+      promptSendBtn.disabled = false;
+    }
+
+    apiToggleBtn.addEventListener('click', () => {
+      const visible = apiConfigEl.style.display !== 'none';
+      apiConfigEl.style.display = visible ? 'none' : '';
+      apiToggleBtn.textContent = visible ? 'Configure' : 'Hide';
+      if (!visible) {
+        const key = localStorage.getItem('cleanslate_api_key');
+        apiKeyInput.value = key || '';
+      }
+    });
+
+    apiSaveBtn.addEventListener('click', () => {
+      const key = apiKeyInput.value.trim();
+      if (key) {
+        localStorage.setItem('cleanslate_api_key', key);
+        apiConfigEl.style.display = 'none';
+        apiToggleBtn.textContent = 'Configure';
+        updateApiStatus();
+      }
+    });
+
+    apiClearBtn.addEventListener('click', () => {
+      localStorage.removeItem('cleanslate_api_key');
+      apiKeyInput.value = '';
+      updateApiStatus();
+    });
+
+    updateApiStatus();
+
+    // ── AI Prompt ──
+    promptSendBtn.addEventListener('click', () => generateWithAI());
+    promptInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) generateWithAI();
+    });
+
+    async function generateWithAI() {
+      const apiKey = getApiKey();
+      const prompt = promptInput.value.trim();
+      if (!apiKey || !prompt) return;
+
+      promptSendBtn.disabled = true;
+      promptSendBtn.classList.add('loading');
+      builderOutput.textContent = 'Generating...';
+
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: BUILDER_SYSTEM_PROMPT }] },
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              maxOutputTokens: 4096,
+              temperature: 0.3,
+            },
+          }),
+        });
+
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.error?.message || `API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+        // Extract code from markdown code blocks if present
+        const codeMatch = text.match(/```(?:liquid|html)?\n([\s\S]*?)```/);
+        builderOutput.textContent = codeMatch ? codeMatch[1].trim() : text.trim();
+      } catch (err) {
+        builderOutput.textContent = `Error: ${err.message}`;
+      } finally {
+        promptSendBtn.disabled = false;
+        promptSendBtn.classList.remove('loading');
+        updateApiStatus();
+      }
+    }
+
+    // ── Quick Templates ──
+    const categories = LiquidBuilder.getCategories();
+    let html = '';
+    for (const [catName, patterns] of Object.entries(categories)) {
+      html += `<div class="builder-cat-title">${escapeHtml(catName)}</div>`;
+      patterns.forEach(p => {
+        html += `<div class="builder-card" data-pattern="${p.id}">
+          <div class="builder-card-name">${escapeHtml(p.name)}</div>
+          <div class="builder-card-desc">${escapeHtml(p.description)}</div>
+        </div>`;
+      });
+    }
+    categoriesEl.innerHTML = html;
+
+    categoriesEl.addEventListener('click', (e) => {
+      const card = e.target.closest('.builder-card');
+      if (!card) return;
+      const pattern = LiquidBuilder.getPattern(card.dataset.pattern);
+      if (!pattern) return;
+      showBuilderForm(pattern, formEl, fieldsEl, categoriesEl, patternNameEl);
+    });
+
+    backBtn.addEventListener('click', () => {
+      formEl.style.display = 'none';
+      categoriesEl.style.display = '';
+      currentPattern = null;
+    });
+
+    generateBtn.addEventListener('click', () => {
+      if (!currentPattern) return;
+      const values = collectBuilderValues(fieldsEl, currentPattern);
+      const code = currentPattern.generate(values);
+      builderOutput.textContent = code;
+    });
+
+    copyBtnB.addEventListener('click', () => {
+      const code = builderOutput.textContent;
+      if (!code || code.startsWith('Describe what') || code.startsWith('Generating')) return;
+      navigator.clipboard.writeText(code).then(() => {
+        copyBtnB.textContent = 'Copied!';
+        setTimeout(() => { copyBtnB.textContent = 'Copy'; }, 1500);
+      });
+    });
+
+    sendBtn.addEventListener('click', () => {
+      const code = builderOutput.textContent;
+      if (!code || code.startsWith('Describe what') || code.startsWith('Generating')) return;
+      editor.setValue(code);
+      document.querySelector('.tab-btn[data-tab="linter"]').click();
+    });
+  }
+
+  // System prompt for AI builder
+  const BUILDER_SYSTEM_PROMPT = `You are a Liquid template expert for CleverTap's LiqP 0.7.9 engine.
+
+Generate ONLY Liquid template code based on the user's request. No explanations, no markdown, no prose — just the raw Liquid/HTML code ready to paste.
+
+CleverTap-specific rules you MUST follow:
+- Use \`Profile.PropertyName\` (capitalized) for user properties
+- Use \`Event.PropertyName\` (capitalized) for event properties
+- Use bracket notation for properties with spaces: \`Profile["First Name"]\`
+- Available filters: default, date, upcase, downcase, capitalize, append, prepend, replace, replace_first, remove, remove_first, split, strip, truncate, truncatewords, escape, url_encode, url_decode, size, first, last, join, sort, reverse, map, where, plus, minus, times, divided_by, round, abs, modulo, json
+- Available tags: if/elsif/else/endif, unless/endunless, for/endfor, case/when/endcase, assign, capture/endcapture, comment/endcomment, abort, increment, decrement
+- Operators: ==, !=, >, <, >=, <=, and, or, contains
+- Use \`{% abort %}\` to suppress message delivery
+- For language switching, use \`Profile.language\` or \`Profile.Language\`
+- Use \`| default: "fallback"\` for safe fallbacks
+- Inside single-quoted HTML attributes, use double quotes in Liquid filters: split:"?"
+- Do NOT use Jinja2 syntax (no set, no {# comments #}, no function calls like length())
+
+Output clean, production-ready code with proper indentation.`;
+
+
+  function showBuilderForm(pattern, formEl, fieldsEl, categoriesEl, patternNameEl) {
+    currentPattern = pattern;
+    patternNameEl.textContent = pattern.name;
+    categoriesEl.style.display = 'none';
+    formEl.style.display = '';
+
+    // Render fields
+    let html = '';
+    pattern.fields.forEach(field => {
+      html += renderBuilderField(field);
+    });
+    fieldsEl.innerHTML = html;
+
+    // Wire up repeater add/remove buttons
+    wireRepeaterEvents(fieldsEl, pattern);
+
+    // Auto-generate on load
+    const values = collectBuilderValues(fieldsEl, pattern);
+    builderOutput.textContent = pattern.generate(values);
+  }
+
+  function renderBuilderField(field) {
+    if (field.type === 'repeater') {
+      return renderRepeaterField(field);
+    }
+
+    let inputHtml = '';
+    const val = field.default || '';
+
+    if (field.type === 'text') {
+      inputHtml = `<input class="builder-input" data-field="${field.id}" type="text" value="${escapeAttr(val)}" placeholder="${escapeAttr(field.placeholder || '')}">`;
+    } else if (field.type === 'textarea') {
+      inputHtml = `<textarea class="builder-textarea" data-field="${field.id}" placeholder="${escapeAttr(field.placeholder || '')}">${escapeHtml(val)}</textarea>`;
+    } else if (field.type === 'select') {
+      const opts = (field.options || []).map(o =>
+        `<option value="${escapeAttr(o)}"${o === val ? ' selected' : ''}>${escapeHtml(o)}</option>`
+      ).join('');
+      inputHtml = `<select class="builder-select" data-field="${field.id}">${opts}</select>`;
+    }
+
+    return `<div class="builder-field">
+      <label class="builder-field-label">${escapeHtml(field.label)}</label>
+      ${inputHtml}
+    </div>`;
+  }
+
+  function renderRepeaterField(field) {
+    const items = field.defaults || [{}];
+    let itemsHtml = '';
+    items.forEach((item, idx) => {
+      itemsHtml += renderRepeaterItem(field, item, idx);
+    });
+
+    return `<div class="builder-field" data-repeater="${field.id}">
+      <label class="builder-field-label">${escapeHtml(field.label)}</label>
+      <div class="builder-repeater-items" data-repeater-items="${field.id}">
+        ${itemsHtml}
+      </div>
+      <button class="btn builder-repeater-add" data-repeater-add="${field.id}">${escapeHtml(field.addLabel || '+ Add')}</button>
+    </div>`;
+  }
+
+  function renderRepeaterItem(field, values, idx) {
+    let subfieldsHtml = '';
+    field.subfields.forEach(sf => {
+      const val = (values && values[sf.id]) || '';
+      let inputHtml = '';
+      if (sf.type === 'text') {
+        inputHtml = `<input class="builder-input" data-subfield="${sf.id}" type="text" value="${escapeAttr(val)}" placeholder="${escapeAttr(sf.placeholder || '')}">`;
+      } else if (sf.type === 'textarea') {
+        inputHtml = `<textarea class="builder-textarea" data-subfield="${sf.id}" placeholder="${escapeAttr(sf.placeholder || '')}">${escapeHtml(val)}</textarea>`;
+      } else if (sf.type === 'select') {
+        const opts = (sf.options || []).map(o =>
+          `<option value="${escapeAttr(o)}"${o === val ? ' selected' : ''}>${escapeHtml(o)}</option>`
+        ).join('');
+        inputHtml = `<select class="builder-select" data-subfield="${sf.id}">${opts}</select>`;
+      }
+      subfieldsHtml += `<div class="builder-field">
+        <label class="builder-field-label">${escapeHtml(sf.label)}</label>
+        ${inputHtml}
+      </div>`;
+    });
+
+    return `<div class="builder-repeater-item" data-idx="${idx}">
+      <button class="builder-repeater-remove" title="Remove">&times;</button>
+      ${subfieldsHtml}
+    </div>`;
+  }
+
+  function wireRepeaterEvents(fieldsEl, pattern) {
+    // Add buttons
+    fieldsEl.querySelectorAll('.builder-repeater-add').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const repeaterId = btn.dataset.repeaterAdd;
+        const field = pattern.fields.find(f => f.id === repeaterId);
+        if (!field) return;
+        const container = fieldsEl.querySelector(`[data-repeater-items="${repeaterId}"]`);
+        const idx = container.children.length;
+        const emptyValues = {};
+        field.subfields.forEach(sf => { emptyValues[sf.id] = ''; });
+        const temp = document.createElement('div');
+        temp.innerHTML = renderRepeaterItem(field, emptyValues, idx);
+        const newItem = temp.firstElementChild;
+        container.appendChild(newItem);
+        wireRemoveButton(newItem);
+      });
+    });
+
+    // Remove buttons (existing items)
+    fieldsEl.querySelectorAll('.builder-repeater-remove').forEach(btn => {
+      wireRemoveButton(btn.closest('.builder-repeater-item'));
+    });
+  }
+
+  function wireRemoveButton(item) {
+    const btn = item.querySelector('.builder-repeater-remove');
+    btn.addEventListener('click', () => { item.remove(); });
+  }
+
+  function collectBuilderValues(fieldsEl, pattern) {
+    const values = {};
+    pattern.fields.forEach(field => {
+      if (field.type === 'repeater') {
+        const container = fieldsEl.querySelector(`[data-repeater-items="${field.id}"]`);
+        if (!container) return;
+        const items = [];
+        container.querySelectorAll('.builder-repeater-item').forEach(itemEl => {
+          const item = {};
+          field.subfields.forEach(sf => {
+            const input = itemEl.querySelector(`[data-subfield="${sf.id}"]`);
+            item[sf.id] = input ? input.value : '';
+          });
+          items.push(item);
+        });
+        values[field.id] = items;
+      } else {
+        const input = fieldsEl.querySelector(`[data-field="${field.id}"]`);
+        values[field.id] = input ? input.value : '';
+      }
+    });
+    return values;
   }
 
   // ─── Lint runner ───────────────────────────────────────────
@@ -201,6 +566,29 @@ Today is {{ greeting }}.
     statusBadge.textContent = errors.length > 0 ? 'Errors Found' : 'Warnings Only';
 
     errorsBody.innerHTML = '';
+
+    // Show "Fix All Encoding" button if multiple HTML entity errors exist
+    const entityErrors = diagnostics.filter(d => d.fix && d.fix.fixType === 'decode_html_entities');
+    if (entityErrors.length > 1) {
+      const fixAllRow = document.createElement('div');
+      fixAllRow.className = 'error-row fix-all-row';
+      fixAllRow.innerHTML = `
+        <div class="error-main">
+          <span class="error-message">Found ${entityErrors.length} HTML entity encoding issues inside Liquid tags.</span>
+        </div>
+      `;
+      const fixAllBtn = document.createElement('button');
+      fixAllBtn.className = 'btn btn-fix btn-fix-all';
+      fixAllBtn.textContent = 'Fix All Encoding';
+      fixAllBtn.title = 'Decode HTML entities in all Liquid tags at once';
+      fixAllBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        fixAllHtmlEntities();
+      });
+      fixAllRow.appendChild(fixAllBtn);
+      errorsBody.appendChild(fixAllRow);
+    }
+
     diagnostics.forEach((d, idx) => {
       const row = document.createElement('div');
       row.className = `error-row severity-${d.severity}`;
@@ -255,6 +643,9 @@ Today is {{ greeting }}.
         break;
       case 'insert_closing_tag':
         fixInsertClosingTag(diagnostic, fix);
+        break;
+      case 'decode_html_entities':
+        fixDecodeHtmlEntities(diagnostic, fix);
         break;
       default:
         break;
@@ -359,6 +750,52 @@ Today is {{ greeting }}.
     editor.replaceRange(insertText,
       { line: insertLine, ch: lineContent.length }
     );
+  }
+
+  function fixAllHtmlEntities() {
+    const entityMap = LiquidLinter.HTML_ENTITY_MAP;
+    const source = editor.getValue();
+
+    // Replace HTML entities only inside Liquid delimiters throughout the entire template
+    const fixed = source.replace(/(\{\{.*?\}\}|\{%.*?%\})/g, (match) => {
+      let decoded = match;
+      for (const [entity, char] of Object.entries(entityMap)) {
+        const re = new RegExp(entity.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+        decoded = decoded.replace(re, char);
+      }
+      return decoded;
+    });
+
+    if (fixed !== source) {
+      editor.setValue(fixed);
+    }
+  }
+
+  function fixDecodeHtmlEntities(diagnostic, fix) {
+    const entityMap = LiquidLinter.HTML_ENTITY_MAP;
+    const line = diagnostic.line - 1;
+    const lineContent = editor.getLine(line);
+
+    // Replace HTML entities only inside Liquid delimiters on this line
+    let newLine = lineContent;
+    // Match {{ ... }} and {% ... %} blocks and decode entities within them
+    newLine = newLine.replace(/(\{\{.*?\}\}|\{%.*?%\})/g, (match) => {
+      let decoded = match;
+      for (const [entity, char] of Object.entries(entityMap)) {
+        decoded = decoded.split(entity).join(char);
+        // Also handle case-insensitive matches (e.g., &#X27; vs &#x27;)
+        const re = new RegExp(entity.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+        decoded = decoded.replace(re, char);
+      }
+      return decoded;
+    });
+
+    if (newLine !== lineContent) {
+      editor.replaceRange(newLine,
+        { line, ch: 0 },
+        { line, ch: lineContent.length }
+      );
+    }
   }
 
   // ─── Input Modal ──────────────────────────────────────────
@@ -553,6 +990,10 @@ Today is {{ greeting }}.
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+  }
+
+  function escapeAttr(str) {
+    return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
   // ─── Leanplum Converter ───────────────────────────────────

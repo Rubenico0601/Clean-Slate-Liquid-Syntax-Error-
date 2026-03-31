@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/theme/material-darker.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/display/placeholder.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/dialog/dialog.min.css">
 
   <!-- App styles -->
   <link rel="stylesheet" href="css/styles.css">
@@ -29,7 +30,7 @@
         <span class="tag">CleverTap &middot; LiqP 0.7.9</span>
       </div>
 
-      <div class="header-center">
+      <div class="header-center" id="linter-stats">
         <div class="stat">
           <span class="stat-dot red"></span>
           <span>Errors:</span>
@@ -43,7 +44,7 @@
         <span class="status-badge status-ok" id="status-badge">No Issues</span>
       </div>
 
-      <div class="header-right">
+      <div class="header-right" id="linter-actions">
         <button class="btn btn-convert" id="btn-convert" title="Convert Leanplum Jinja2 syntax to CleverTap LiqP syntax">LP &rarr; CT</button>
         <button class="btn" id="btn-sample">Valid Sample</button>
         <button class="btn btn-danger" id="btn-broken-sample">Broken Sample</button>
@@ -51,8 +52,21 @@
       </div>
     </header>
 
-    <!-- ─── Main ────────────────────────────────────────── -->
-    <main class="main">
+    <!-- ─── Tab Bar ─────────────────────────────────────── -->
+    <nav class="tab-bar">
+      <button class="tab-btn active" data-tab="linter">
+        <span class="tab-icon">&#9998;</span> Linter
+      </button>
+      <button class="tab-btn" data-tab="builder">
+        <span class="tab-icon">&#9881;</span> Builder
+      </button>
+      <button class="tab-btn" data-tab="reference">
+        <span class="tab-icon">&#9782;</span> Reference
+      </button>
+    </nav>
+
+    <!-- ═══ Tab: Linter ═══════════════════════════════════ -->
+    <main class="tab-content active" id="tab-linter">
 
       <!-- Editor -->
       <section class="editor-panel">
@@ -68,7 +82,7 @@
       <!-- Results -->
       <aside class="results-panel">
 
-        <!-- Errors -->
+        <!-- Diagnostics -->
         <section class="errors-section">
           <div class="panel-header">
             <span class="panel-title">Diagnostics</span>
@@ -93,93 +107,207 @@
           </div>
         </section>
 
-        <!-- Quick Reference -->
-        <section class="reference-section" id="ref-panel">
-          <div class="panel-header">
-            <span class="panel-title">Quick Reference</span>
-            <button class="btn" id="ref-toggle">Hide Reference</button>
-          </div>
-          <div class="ref-content">
-
-            <div class="ref-group">
-              <div class="ref-group-title">Block Tags</div>
-              <div class="ref-tags">
-                <span class="ref-tag">if / elsif / else / endif</span>
-                <span class="ref-tag">unless / endunless</span>
-                <span class="ref-tag">for / endfor</span>
-                <span class="ref-tag">case / when / endcase</span>
-                <span class="ref-tag">comment / endcomment</span>
-                <span class="ref-tag">raw / endraw</span>
-                <span class="ref-tag">tablerow / endtablerow</span>
-                <span class="ref-tag">capture / endcapture</span>
-              </div>
-            </div>
-
-            <div class="ref-group">
-              <div class="ref-group-title">Standalone Tags</div>
-              <div class="ref-tags">
-                <span class="ref-tag">assign</span>
-                <span class="ref-tag">increment</span>
-                <span class="ref-tag">decrement</span>
-                <span class="ref-tag">abort</span>
-                <span class="ref-tag">break</span>
-                <span class="ref-tag">continue</span>
-              </div>
-            </div>
-
-            <div class="ref-group">
-              <div class="ref-group-title">Operators</div>
-              <div class="ref-tags">
-                <span class="ref-tag">==</span>
-                <span class="ref-tag">!=</span>
-                <span class="ref-tag">&gt;</span>
-                <span class="ref-tag">&lt;</span>
-                <span class="ref-tag">&gt;=</span>
-                <span class="ref-tag">&lt;=</span>
-                <span class="ref-tag">and</span>
-                <span class="ref-tag">or</span>
-                <span class="ref-tag">contains</span>
-              </div>
-            </div>
-
-            <div class="ref-group">
-              <div class="ref-group-title">CleverTap Objects</div>
-              <div class="ref-tags">
-                <span class="ref-tag">Profile.PropertyName</span>
-                <span class="ref-tag">Event.PropertyName</span>
-                <span class="ref-tag">Event["Property Name"]</span>
-              </div>
-            </div>
-
-            <div class="ref-group">
-              <div class="ref-group-title">Common Filters</div>
-              <div class="ref-tags">
-                <span class="ref-tag">default</span>
-                <span class="ref-tag">date</span>
-                <span class="ref-tag">upcase</span>
-                <span class="ref-tag">downcase</span>
-                <span class="ref-tag">capitalize</span>
-                <span class="ref-tag">append</span>
-                <span class="ref-tag">prepend</span>
-                <span class="ref-tag">replace</span>
-                <span class="ref-tag">split</span>
-                <span class="ref-tag">strip</span>
-                <span class="ref-tag">truncate</span>
-                <span class="ref-tag">size</span>
-                <span class="ref-tag">plus</span>
-                <span class="ref-tag">minus</span>
-                <span class="ref-tag">times</span>
-                <span class="ref-tag">divided_by</span>
-                <span class="ref-tag">round</span>
-                <span class="ref-tag">abs</span>
-              </div>
-            </div>
-
-          </div>
-        </section>
-
       </aside>
     </main>
+
+    <!-- ═══ Tab: Builder ══════════════════════════════════ -->
+    <div class="tab-content" id="tab-builder">
+      <div class="builder-layout">
+
+        <!-- Left: Prompt + Quick Templates -->
+        <div class="builder-sidebar">
+
+          <!-- API Key config (collapsible) -->
+          <div class="builder-api-bar">
+            <div class="builder-api-status" id="builder-api-status">
+              <span class="api-dot" id="api-dot"></span>
+              <span id="api-status-text">No API key set</span>
+            </div>
+            <button class="btn" id="builder-api-toggle">Configure</button>
+          </div>
+          <div class="builder-api-config" id="builder-api-config" style="display:none;">
+            <label class="builder-field-label">Gemini API Key</label>
+            <input class="builder-input" id="builder-api-key" type="password" placeholder="AIza...">
+            <div class="builder-api-hint">Stored locally in your browser. Never sent anywhere except the Google Gemini API. Free tier: 15 requests/min.</div>
+            <div class="builder-api-actions">
+              <button class="btn btn-accent" id="builder-api-save">Save Key</button>
+              <button class="btn btn-danger" id="builder-api-clear">Clear Key</button>
+            </div>
+          </div>
+
+          <!-- Prompt input -->
+          <div class="builder-prompt-area">
+            <div class="panel-header">
+              <span class="panel-title">Describe what you need</span>
+            </div>
+            <div class="builder-prompt-wrap">
+              <textarea class="builder-prompt-input" id="builder-prompt" placeholder="e.g., Create a template where users see different content based on their language — English, French, Spanish, and German. Each should have a personalized greeting with their name."></textarea>
+              <button class="btn btn-accent builder-prompt-btn" id="builder-prompt-send">Generate with Gemini</button>
+            </div>
+          </div>
+
+          <!-- Quick Templates -->
+          <div class="builder-templates-section">
+            <div class="panel-header">
+              <span class="panel-title">Quick Templates</span>
+            </div>
+            <div class="builder-categories" id="builder-categories"></div>
+            <div class="builder-form-area" id="builder-form" style="display:none;">
+              <div class="panel-header builder-form-header">
+                <button class="btn builder-back-btn" id="builder-back">&larr; Back</button>
+                <span class="panel-title" id="builder-pattern-name"></span>
+              </div>
+              <div class="builder-fields" id="builder-fields"></div>
+              <div class="builder-form-actions">
+                <button class="btn btn-accent" id="builder-generate">Generate Code</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Right: Code Preview -->
+        <div class="builder-preview">
+          <div class="panel-header">
+            <span class="panel-title">Generated Code</span>
+            <div class="builder-preview-actions">
+              <button class="btn" id="builder-copy">Copy</button>
+              <button class="btn btn-accent" id="builder-send">Send to Linter</button>
+            </div>
+          </div>
+          <div class="builder-output-wrap">
+            <pre class="builder-output" id="builder-output"><code>Describe what you need above, or pick a quick template to get started.</code></pre>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ═══ Tab: Reference ════════════════════════════════ -->
+    <div class="tab-content" id="tab-reference">
+      <div class="reference-layout">
+
+        <div class="ref-col">
+          <div class="ref-card">
+            <div class="ref-card-title">Block Tags</div>
+            <div class="ref-card-desc">Tags that wrap content and require a closing tag.</div>
+            <div class="ref-tags">
+              <span class="ref-tag">if / elsif / else / endif</span>
+              <span class="ref-tag">unless / endunless</span>
+              <span class="ref-tag">for / endfor</span>
+              <span class="ref-tag">case / when / endcase</span>
+              <span class="ref-tag">comment / endcomment</span>
+              <span class="ref-tag">raw / endraw</span>
+              <span class="ref-tag">tablerow / endtablerow</span>
+              <span class="ref-tag">capture / endcapture</span>
+            </div>
+            <div class="ref-example">
+              <div class="ref-example-label">Example</div>
+              <pre class="ref-code">{% if Profile.plan == "premium" %}
+  Welcome back, VIP!
+{% else %}
+  Upgrade to premium today.
+{% endif %}</pre>
+            </div>
+          </div>
+
+          <div class="ref-card">
+            <div class="ref-card-title">Standalone Tags</div>
+            <div class="ref-card-desc">Tags that perform an action without wrapping content.</div>
+            <div class="ref-tags">
+              <span class="ref-tag">assign</span>
+              <span class="ref-tag">increment</span>
+              <span class="ref-tag">decrement</span>
+              <span class="ref-tag">abort</span>
+              <span class="ref-tag">break</span>
+              <span class="ref-tag">continue</span>
+            </div>
+            <div class="ref-example">
+              <div class="ref-example-label">Example</div>
+              <pre class="ref-code">{% assign name = Profile.Name | default: "Friend" %}
+Hello, {{ name }}!</pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="ref-col">
+          <div class="ref-card">
+            <div class="ref-card-title">Operators</div>
+            <div class="ref-card-desc">Comparison and logical operators for conditions.</div>
+            <div class="ref-tags">
+              <span class="ref-tag">==</span>
+              <span class="ref-tag">!=</span>
+              <span class="ref-tag">&gt;</span>
+              <span class="ref-tag">&lt;</span>
+              <span class="ref-tag">&gt;=</span>
+              <span class="ref-tag">&lt;=</span>
+              <span class="ref-tag">and</span>
+              <span class="ref-tag">or</span>
+              <span class="ref-tag">contains</span>
+            </div>
+            <div class="ref-example">
+              <div class="ref-example-label">Example</div>
+              <pre class="ref-code">{% if Profile.age >= 18 and Profile.country == "US" %}
+  Eligible for offer.
+{% endif %}</pre>
+            </div>
+          </div>
+
+          <div class="ref-card">
+            <div class="ref-card-title">CleverTap Objects</div>
+            <div class="ref-card-desc">Access user profile and event data. Property names are case-sensitive.</div>
+            <div class="ref-tags">
+              <span class="ref-tag">Profile.PropertyName</span>
+              <span class="ref-tag">Profile["Property Name"]</span>
+              <span class="ref-tag">Event.PropertyName</span>
+              <span class="ref-tag">Event["Property Name"]</span>
+              <span class="ref-tag">Profile.Identity</span>
+            </div>
+            <div class="ref-example">
+              <div class="ref-example-label">Example — Bracket notation for spaces</div>
+              <pre class="ref-code">{{ Event["Product Name"] | upcase }}</pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="ref-col">
+          <div class="ref-card">
+            <div class="ref-card-title">Common Filters</div>
+            <div class="ref-card-desc">Transform output values with pipe syntax.</div>
+            <div class="ref-tags">
+              <span class="ref-tag">default</span>
+              <span class="ref-tag">date</span>
+              <span class="ref-tag">upcase</span>
+              <span class="ref-tag">downcase</span>
+              <span class="ref-tag">capitalize</span>
+              <span class="ref-tag">append</span>
+              <span class="ref-tag">prepend</span>
+              <span class="ref-tag">replace</span>
+              <span class="ref-tag">split</span>
+              <span class="ref-tag">strip</span>
+              <span class="ref-tag">truncate</span>
+              <span class="ref-tag">truncatewords</span>
+              <span class="ref-tag">size</span>
+              <span class="ref-tag">plus</span>
+              <span class="ref-tag">minus</span>
+              <span class="ref-tag">times</span>
+              <span class="ref-tag">divided_by</span>
+              <span class="ref-tag">round</span>
+              <span class="ref-tag">abs</span>
+              <span class="ref-tag">url_encode</span>
+              <span class="ref-tag">json</span>
+            </div>
+            <div class="ref-example">
+              <div class="ref-example-label">Example — Filter chain</div>
+              <pre class="ref-code">{{ Profile.Name | default: "Customer" | upcase }}
+{{ "now" | date: "%B %d, %Y" }}</pre>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
   </div>
 
   <!-- CodeMirror JS -->
@@ -188,6 +316,10 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/edit/matchbrackets.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/edit/closebrackets.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/selection/active-line.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/dialog/dialog.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/search/searchcursor.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/search/search.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/search/jump-to-line.min.js"></script>
 
   <!-- Simple Liquid mode (highlight tags) -->
   <script>
@@ -197,7 +329,6 @@
           return { inTag: false, inOutput: false, inString: false, stringChar: null };
         },
         token: function (stream, state) {
-          // Inside a string
           if (state.inString) {
             while (!stream.eol()) {
               var ch = stream.next();
@@ -210,7 +341,6 @@
             return 'string';
           }
 
-          // Inside {% ... %}
           if (state.inTag) {
             if (stream.match('%}') || stream.match('-%}')) {
               state.inTag = false;
@@ -243,7 +373,6 @@
             return 'variable';
           }
 
-          // Inside {{ ... }}
           if (state.inOutput) {
             if (stream.match('}}') || stream.match('-}}')) {
               state.inOutput = false;
@@ -273,7 +402,6 @@
             return 'variable';
           }
 
-          // Look for tag/output start
           if (stream.match('{%-') || stream.match('{%')) {
             state.inTag = true;
             return 'tag bracket';
@@ -283,7 +411,6 @@
             return 'tag bracket';
           }
 
-          // Plain text
           while (stream.next() != null && !stream.match(/\{[{%]/, false)) {}
           return null;
         }
@@ -294,6 +421,7 @@
   <!-- App -->
   <script src="js/liquid-linter.js"></script>
   <script src="js/leanplum-converter.js"></script>
+  <script src="js/liquid-builder.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

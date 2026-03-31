@@ -85,6 +85,9 @@ class LiquidLinter {
     for (const token of tokens) {
       if (token.type === 'tag') this.validateTag(token);
       if (token.type === 'output') this.validateOutput(token);
+      if (token.type === 'tag' || token.type === 'output') {
+        this.checkHtmlEntities(token);
+      }
     }
 
     // Step 3: Block matching
@@ -756,6 +759,55 @@ class LiquidLinter {
       // Check for {{ or {% that weren't captured as tokens
       // (This shouldn't happen normally since tokenizer is greedy, but check anyway)
     }
+  }
+
+  // ─── HTML Entity Detection inside Liquid ─────────────────────
+
+  // Map of HTML entities that break Liquid when inside {{ }} or {% %} tags.
+  // Single-quote entities (&#39; etc.) decode to double quotes because Liquid tags
+  // typically live inside single-quoted HTML attributes (e.g. src='{{...}}'),
+  // so the CleverTap-compliant form uses double quotes: split:"?"
+  static get HTML_ENTITY_MAP() {
+    return {
+      '&#39;': '"',
+      '&#x27;': '"',
+      '&apos;': '"',
+      '&quot;': '"',
+      '&amp;': '&',
+      '&lt;': '<',
+      '&gt;': '>',
+    };
+  }
+
+  checkHtmlEntities(token) {
+    if (token.broken) return;
+    const raw = token.value;
+
+    // Build a regex that matches any of the known HTML entities
+    const entityPattern = /&#39;|&#x27;|&apos;|&quot;|&amp;|&lt;|&gt;/gi;
+    const matches = raw.match(entityPattern);
+    if (!matches) return;
+
+    // Collect unique entities found
+    const found = [...new Set(matches.map(m => m.toLowerCase()))];
+    const decoded = found.map(e => {
+      const key = Object.keys(LiquidLinter.HTML_ENTITY_MAP)
+        .find(k => k.toLowerCase() === e);
+      return `\`${e}\` → \`${LiquidLinter.HTML_ENTITY_MAP[key]}\``;
+    });
+
+    // Build a contextual example if single-quote entities are present
+    const hasSingleQuoteEntity = found.some(e =>
+      ['&#39;', '&#x27;', '&apos;'].includes(e));
+    const example = hasSingleQuoteEntity
+      ? ` Example: \`split:&#39;?&#39;\` → \`split:"?"\`.`
+      : '';
+
+    this.addDiagnostic(token.line, token.col, 'error',
+      `HTML-encoded characters inside Liquid tag: ${decoded.join(', ')}. ` +
+      `These will be read literally by the Liquid engine and break filters/logic.` +
+      example,
+      { fixType: 'decode_html_entities', token });
   }
 
   // ─── Unclosed Strings ──────────────────────────────────────
