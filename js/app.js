@@ -208,18 +208,21 @@ Today is {{ greeting }}.
     const promptInput = document.getElementById('builder-prompt');
     const promptSendBtn = document.getElementById('builder-prompt-send');
 
-    // Default embedded API key
-    const DEFAULT_API_KEY = 'AIzaSyD_9MSKAdJtnsOIMRe0ATt89dxQBMFKcLI';
-
     function getApiKey() {
-      return localStorage.getItem('cleanslate_api_key') || DEFAULT_API_KEY;
+      return localStorage.getItem('cleanslate_api_key') || '';
     }
 
     function updateApiStatus() {
-      const customKey = localStorage.getItem('cleanslate_api_key');
-      apiDot.classList.add('connected');
-      apiStatusText.textContent = customKey ? 'Custom API key' : 'Ready (built-in key)';
-      promptSendBtn.disabled = false;
+      const key = getApiKey();
+      if (key) {
+        apiDot.classList.add('connected');
+        apiStatusText.textContent = 'API key configured';
+        promptSendBtn.disabled = false;
+      } else {
+        apiDot.classList.remove('connected');
+        apiStatusText.textContent = 'No API key — click Configure';
+        promptSendBtn.disabled = true;
+      }
     }
 
     apiToggleBtn.addEventListener('click', () => {
