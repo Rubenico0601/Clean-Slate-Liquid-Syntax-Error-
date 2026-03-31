@@ -117,24 +117,6 @@
         <!-- Left: Prompt + Quick Templates -->
         <div class="builder-sidebar">
 
-          <!-- API Key config (collapsible) -->
-          <div class="builder-api-bar">
-            <div class="builder-api-status" id="builder-api-status">
-              <span class="api-dot" id="api-dot"></span>
-              <span id="api-status-text">No API key set</span>
-            </div>
-            <button class="btn" id="builder-api-toggle">Configure</button>
-          </div>
-          <div class="builder-api-config" id="builder-api-config" style="display:none;">
-            <label class="builder-field-label">Gemini API Key</label>
-            <input class="builder-input" id="builder-api-key" type="password" placeholder="AIza...">
-            <div class="builder-api-hint">Stored locally in your browser. Never sent anywhere except the Google Gemini API. Free tier: 15 requests/min.</div>
-            <div class="builder-api-actions">
-              <button class="btn btn-accent" id="builder-api-save">Save Key</button>
-              <button class="btn btn-danger" id="builder-api-clear">Clear Key</button>
-            </div>
-          </div>
-
           <!-- Prompt input -->
           <div class="builder-prompt-area">
             <div class="panel-header">
@@ -142,7 +124,7 @@
             </div>
             <div class="builder-prompt-wrap">
               <textarea class="builder-prompt-input" id="builder-prompt" placeholder="e.g., Create a template where users see different content based on their language — English, French, Spanish, and German. Each should have a personalized greeting with their name."></textarea>
-              <button class="btn btn-accent builder-prompt-btn" id="builder-prompt-send">Generate with Gemini</button>
+              <button class="btn btn-accent builder-prompt-btn" id="builder-prompt-send">Generate</button>
             </div>
           </div>
 

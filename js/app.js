@@ -197,81 +197,27 @@ Today is {{ greeting }}.
     const sendBtn = document.getElementById('builder-send');
     const patternNameEl = document.getElementById('builder-pattern-name');
 
-    // ── API Key management ──
-    const apiKeyInput = document.getElementById('builder-api-key');
-    const apiConfigEl = document.getElementById('builder-api-config');
-    const apiToggleBtn = document.getElementById('builder-api-toggle');
-    const apiSaveBtn = document.getElementById('builder-api-save');
-    const apiClearBtn = document.getElementById('builder-api-clear');
-    const apiDot = document.getElementById('api-dot');
-    const apiStatusText = document.getElementById('api-status-text');
+    // ── AI Prompt ──
+    const PROXY_URL = 'https://cleanslate-gemini-proxy.ruben-charles2508.workers.dev';
+
     const promptInput = document.getElementById('builder-prompt');
     const promptSendBtn = document.getElementById('builder-prompt-send');
 
-    function getApiKey() {
-      return localStorage.getItem('cleanslate_api_key') || '';
-    }
-
-    function updateApiStatus() {
-      const key = getApiKey();
-      if (key) {
-        apiDot.classList.add('connected');
-        apiStatusText.textContent = 'API key configured';
-        promptSendBtn.disabled = false;
-      } else {
-        apiDot.classList.remove('connected');
-        apiStatusText.textContent = 'No API key — click Configure';
-        promptSendBtn.disabled = true;
-      }
-    }
-
-    apiToggleBtn.addEventListener('click', () => {
-      const visible = apiConfigEl.style.display !== 'none';
-      apiConfigEl.style.display = visible ? 'none' : '';
-      apiToggleBtn.textContent = visible ? 'Configure' : 'Hide';
-      if (!visible) {
-        const key = localStorage.getItem('cleanslate_api_key');
-        apiKeyInput.value = key || '';
-      }
-    });
-
-    apiSaveBtn.addEventListener('click', () => {
-      const key = apiKeyInput.value.trim();
-      if (key) {
-        localStorage.setItem('cleanslate_api_key', key);
-        apiConfigEl.style.display = 'none';
-        apiToggleBtn.textContent = 'Configure';
-        updateApiStatus();
-      }
-    });
-
-    apiClearBtn.addEventListener('click', () => {
-      localStorage.removeItem('cleanslate_api_key');
-      apiKeyInput.value = '';
-      updateApiStatus();
-    });
-
-    updateApiStatus();
-
-    // ── AI Prompt ──
     promptSendBtn.addEventListener('click', () => generateWithAI());
     promptInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) generateWithAI();
     });
 
     async function generateWithAI() {
-      const apiKey = getApiKey();
       const prompt = promptInput.value.trim();
-      if (!apiKey || !prompt) return;
+      if (!prompt) return;
 
       promptSendBtn.disabled = true;
       promptSendBtn.classList.add('loading');
       builderOutput.textContent = 'Generating...';
 
       try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
-
-        const response = await fetch(url, {
+        const response = await fetch(PROXY_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -300,7 +246,6 @@ Today is {{ greeting }}.
       } finally {
         promptSendBtn.disabled = false;
         promptSendBtn.classList.remove('loading');
-        updateApiStatus();
       }
     }
 
