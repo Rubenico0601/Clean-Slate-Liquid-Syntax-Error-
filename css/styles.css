@@ -187,14 +187,16 @@ html, body {
 }
 
 /* ─── Tab Content ─────────────────────────────────────── */
-.tab-content {
-  display: none;
+.tab-content,
+main.tab-content {
+  display: none !important;
   flex: 1;
   overflow: hidden;
 }
 
-.tab-content.active {
-  display: flex;
+.tab-content.active,
+main.tab-content.active {
+  display: flex !important;
 }
 
 /* ─── Buttons ─────────────────────────────────────────── */
@@ -250,15 +252,6 @@ html, body {
   background: linear-gradient(135deg, #0a94f7, #7e72ea);
   border-color: #0a94f7;
   color: #fff;
-}
-
-/* ─── Linter Tab (Main) ──────────────────────────────── */
-#tab-linter {
-  display: none;
-}
-
-#tab-linter.active {
-  display: flex;
 }
 
 /* ─── Editor Panel ────────────────────────────────────── */
