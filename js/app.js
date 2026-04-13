@@ -197,58 +197,6 @@ Today is {{ greeting }}.
     const sendBtn = document.getElementById('builder-send');
     const patternNameEl = document.getElementById('builder-pattern-name');
 
-    // ── AI Prompt ──
-    const PROXY_URL = 'https://cleanslate-gemini-proxy.ruben-charles2508.workers.dev';
-
-    const promptInput = document.getElementById('builder-prompt');
-    const promptSendBtn = document.getElementById('builder-prompt-send');
-
-    promptSendBtn.addEventListener('click', () => generateWithAI());
-    promptInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) generateWithAI();
-    });
-
-    async function generateWithAI() {
-      const prompt = promptInput.value.trim();
-      if (!prompt) return;
-
-      promptSendBtn.disabled = true;
-      promptSendBtn.classList.add('loading');
-      builderOutput.textContent = 'Generating...';
-
-      try {
-        const response = await fetch(PROXY_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            system_instruction: { parts: [{ text: BUILDER_SYSTEM_PROMPT }] },
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-              maxOutputTokens: 4096,
-              temperature: 0.3,
-            },
-          }),
-        });
-
-        if (!response.ok) {
-          const err = await response.json().catch(() => ({}));
-          throw new Error(err.error?.message || `API error: ${response.status}`);
-        }
-
-        const data = await response.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-        // Extract code from markdown code blocks if present
-        const codeMatch = text.match(/```(?:liquid|html)?\n([\s\S]*?)```/);
-        builderOutput.textContent = codeMatch ? codeMatch[1].trim() : text.trim();
-      } catch (err) {
-        builderOutput.textContent = `Error: ${err.message}`;
-      } finally {
-        promptSendBtn.disabled = false;
-        promptSendBtn.classList.remove('loading');
-      }
-    }
-
     // ── Quick Templates ──
     const categories = LiquidBuilder.getCategories();
     let html = '';
@@ -300,27 +248,6 @@ Today is {{ greeting }}.
       document.querySelector('.tab-btn[data-tab="linter"]').click();
     });
   }
-
-  // System prompt for AI builder
-  const BUILDER_SYSTEM_PROMPT = `You are a Liquid template expert for CleverTap's LiqP 0.7.9 engine.
-
-Generate ONLY Liquid template code based on the user's request. No explanations, no markdown, no prose — just the raw Liquid/HTML code ready to paste.
-
-CleverTap-specific rules you MUST follow:
-- Use \`Profile.PropertyName\` (capitalized) for user properties
-- Use \`Event.PropertyName\` (capitalized) for event properties
-- Use bracket notation for properties with spaces: \`Profile["First Name"]\`
-- Available filters: default, date, upcase, downcase, capitalize, append, prepend, replace, replace_first, remove, remove_first, split, strip, truncate, truncatewords, escape, url_encode, url_decode, size, first, last, join, sort, reverse, map, where, plus, minus, times, divided_by, round, abs, modulo, json
-- Available tags: if/elsif/else/endif, unless/endunless, for/endfor, case/when/endcase, assign, capture/endcapture, comment/endcomment, abort, increment, decrement
-- Operators: ==, !=, >, <, >=, <=, and, or, contains
-- Use \`{% abort %}\` to suppress message delivery
-- For language switching, use \`Profile.language\` or \`Profile.Language\`
-- Use \`| default: "fallback"\` for safe fallbacks
-- Inside single-quoted HTML attributes, use double quotes in Liquid filters: split:"?"
-- Do NOT use Jinja2 syntax (no set, no {# comments #}, no function calls like length())
-
-Output clean, production-ready code with proper indentation.`;
-
 
   function showBuilderForm(pattern, formEl, fieldsEl, categoriesEl, patternNameEl) {
     currentPattern = pattern;
