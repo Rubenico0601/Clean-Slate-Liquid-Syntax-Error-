@@ -192,17 +192,55 @@ const LiquidBuilder = (function () {
       name: 'Date Formatting',
       category: 'Personalization',
       description: 'Display the current date or a date property in a specific format.',
+      // Timezone offsets from UTC in seconds: [standard, DST]
+      _timezones: {
+        'IST — India (UTC+5:30)':            [19800, 19800],       // No DST
+        'UTC (UTC+0)':                        [0, 0],
+        'EST — US Eastern (UTC-5)':           [-18000, -14400],     // DST = EDT (UTC-4)
+        'CST — US Central (UTC-6)':           [-21600, -18000],     // DST = CDT (UTC-5)
+        'MST — US Mountain (UTC-7)':          [-25200, -21600],     // DST = MDT (UTC-6)
+        'PST — US Pacific (UTC-8)':           [-28800, -25200],     // DST = PDT (UTC-7)
+        'GMT — UK (UTC+0)':                   [0, 3600],            // DST = BST (UTC+1)
+        'CET — Central Europe (UTC+1)':       [3600, 7200],         // DST = CEST (UTC+2)
+        'EET — Eastern Europe (UTC+2)':       [7200, 10800],        // DST = EEST (UTC+3)
+        'JST — Japan (UTC+9)':                [32400, 32400],       // No DST
+        'AEST — Australia Eastern (UTC+10)':  [36000, 39600],       // DST = AEDT (UTC+11)
+        'NZST — New Zealand (UTC+12)':        [43200, 46800],       // DST = NZDT (UTC+13)
+        'GST — Gulf / UAE (UTC+4)':           [14400, 14400],       // No DST
+        'SGT — Singapore (UTC+8)':            [28800, 28800],       // No DST
+        'CST — China (UTC+8)':                [28800, 28800],       // No DST
+        'WIB — Indonesia Western (UTC+7)':    [25200, 25200],       // No DST
+        'BRT — Brazil (UTC-3)':               [-10800, -10800],     // No DST
+      },
       fields: [
         { id: 'source', label: 'Date Source', type: 'select', options: ['"now" (current date)', 'Event property', 'Profile property'], default: '"now" (current date)' },
         { id: 'property', label: 'Property (if not "now")', type: 'text', placeholder: 'e.g., Event.purchase_date', default: '' },
         { id: 'format', label: 'Date Format', type: 'select', options: ['%B %d, %Y (March 31, 2026)', '%m/%d/%Y (03/31/2026)', '%d/%m/%Y (31/03/2026)', '%Y-%m-%d (2026-03-31)', '%b %d (Mar 31)', '%A, %B %d (%A full weekday)', '%H:%M (24h time)', '%I:%M %p (12h time)'], default: '%B %d, %Y (March 31, 2026)' },
+        { id: 'timezone', label: 'Recipient Timezone', type: 'select', options: ['IST — India (UTC+5:30)', 'UTC (UTC+0)', 'EST — US Eastern (UTC-5)', 'CST — US Central (UTC-6)', 'MST — US Mountain (UTC-7)', 'PST — US Pacific (UTC-8)', 'GMT — UK (UTC+0)', 'CET — Central Europe (UTC+1)', 'EET — Eastern Europe (UTC+2)', 'JST — Japan (UTC+9)', 'AEST — Australia Eastern (UTC+10)', 'NZST — New Zealand (UTC+12)', 'GST — Gulf / UAE (UTC+4)', 'SGT — Singapore (UTC+8)', 'CST — China (UTC+8)', 'WIB — Indonesia Western (UTC+7)', 'BRT — Brazil (UTC-3)'], default: 'IST — India (UTC+5:30)' },
+        { id: 'dst', label: 'Daylight Saving Time active?', type: 'select', options: ['No', 'Yes'], default: 'No' },
       ],
       generate(values) {
-        const fmt = values.format.split(' (')[0]; // Extract format string before description
+        const fmt = values.format.split(' (')[0];
         let source = '"now"';
         if (values.source.startsWith('Event') && values.property) source = values.property;
         else if (values.source.startsWith('Profile') && values.property) source = values.property;
-        return `{{ ${source} | date: "${fmt}" }}`;
+
+        const tz = this._timezones[values.timezone];
+        if (!tz) return `{{ ${source} | date: "${fmt}" }}`;
+
+        const IST_OFFSET = 19800; // IST is UTC+5:30 = 19800 seconds
+        const dstIndex = values.dst === 'Yes' ? 1 : 0;
+        const targetOffset = tz[dstIndex];
+        const diff = targetOffset - IST_OFFSET; // difference from IST in seconds
+
+        if (diff === 0) {
+          return `{{ ${source} | date: "${fmt}" }}`;
+        }
+        // Use plus for positive offset, minus for negative
+        if (diff > 0) {
+          return `{{ ${source} | date: "${fmt}" | plus: ${diff} }}`;
+        }
+        return `{{ ${source} | date: "${fmt}" | minus: ${Math.abs(diff)} }}`;
       },
     },
 
