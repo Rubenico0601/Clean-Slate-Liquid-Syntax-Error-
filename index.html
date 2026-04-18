@@ -63,6 +63,9 @@
       <button class="tab-btn" data-tab="reference">
         <span class="tab-icon">&#9782;</span> Reference
       </button>
+      <button class="tab-btn" data-tab="tools">
+        <span class="tab-icon">&#9874;</span> Tools
+      </button>
     </nav>
 
     <!-- ═══ Tab: Linter ═══════════════════════════════════ -->
@@ -148,6 +151,129 @@
           </div>
           <div class="builder-output-wrap">
             <pre class="builder-output" id="builder-output"><code>Pick a quick template to get started.</code></pre>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ═══ Tab: Tools ═══════════════════════════════════ -->
+    <div class="tab-content" id="tab-tools">
+      <div class="tools-layout">
+
+        <!-- LEFT: Minutes to Time -->
+        <div class="tools-col">
+          <div class="tool-card tool-card-full">
+            <div class="tool-card-title">Minutes to Time</div>
+            <div class="tool-card-desc">Convert minute values from CleverTap sent logs into readable time.</div>
+
+            <div class="tool-form">
+              <label class="builder-field-label" for="minutes-input">Minutes from Sent Log</label>
+              <div class="tool-input-row">
+                <input class="builder-input" id="minutes-input" type="number" min="0" max="1439" placeholder="e.g. 470" />
+                <button class="btn btn-accent" id="btn-convert-minutes">Convert</button>
+              </div>
+            </div>
+
+            <div class="tool-result" id="minutes-result" style="display:none;">
+              <div class="tool-result-time" id="minutes-result-time"></div>
+              <div class="tool-result-detail" id="minutes-result-detail"></div>
+            </div>
+
+            <div class="tool-examples">
+              <div class="tool-examples-title">Quick Examples</div>
+              <div class="tool-examples-grid">
+                <span class="tool-example-chip" data-minutes="0">0 &rarr; 12:00 AM</span>
+                <span class="tool-example-chip" data-minutes="360">360 &rarr; 6:00 AM</span>
+                <span class="tool-example-chip" data-minutes="470">470 &rarr; 7:50 AM</span>
+                <span class="tool-example-chip" data-minutes="720">720 &rarr; 12:00 PM</span>
+                <span class="tool-example-chip" data-minutes="1020">1020 &rarr; 5:00 PM</span>
+                <span class="tool-example-chip" data-minutes="1410">1410 &rarr; 11:30 PM</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT: Epoch Converter -->
+        <div class="tools-col">
+          <div class="tool-card tool-card-full">
+            <div class="tool-card-title">Epoch Timestamp Converter</div>
+            <div class="tool-card-desc">Convert between epoch timestamps and human-readable dates.</div>
+
+            <!-- Epoch → Date -->
+            <div class="tool-section">
+              <div class="tool-section-label">Epoch &rarr; Readable Date</div>
+              <div class="tool-form">
+                <div class="tool-input-row">
+                  <input class="builder-input" id="epoch-input" type="number" placeholder="e.g. 1776481374" />
+                  <button class="btn btn-accent" id="btn-epoch-to-date">Convert</button>
+                </div>
+              </div>
+              <div class="tool-result tool-result-compact" id="epoch-to-date-result" style="display:none;">
+                <div class="tool-result-row">
+                  <span class="tool-result-label">GMT</span>
+                  <span class="tool-result-value" id="epoch-gmt-time"></span>
+                </div>
+                <div class="tool-result-row">
+                  <span class="tool-result-label tool-label-local" id="epoch-local-detail">Your timezone</span>
+                  <span class="tool-result-value tool-value-local" id="epoch-local-time"></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Date → Epoch -->
+            <div class="tool-section">
+              <div class="tool-section-label">Date &rarr; Epoch</div>
+              <div class="tool-form">
+                <div class="tool-date-grid">
+                  <div class="tool-date-field">
+                    <label class="builder-field-label" for="dt-year">Yr</label>
+                    <input class="builder-input" id="dt-year" type="number" placeholder="2026" />
+                  </div>
+                  <div class="tool-date-field">
+                    <label class="builder-field-label" for="dt-month">Mon</label>
+                    <input class="builder-input" id="dt-month" type="number" min="1" max="12" placeholder="4" />
+                  </div>
+                  <div class="tool-date-field">
+                    <label class="builder-field-label" for="dt-day">Day</label>
+                    <input class="builder-input" id="dt-day" type="number" min="1" max="31" placeholder="18" />
+                  </div>
+                  <div class="tool-date-field">
+                    <label class="builder-field-label" for="dt-hour">Hr</label>
+                    <input class="builder-input" id="dt-hour" type="number" min="0" max="23" placeholder="3" />
+                  </div>
+                  <div class="tool-date-field">
+                    <label class="builder-field-label" for="dt-minute">Min</label>
+                    <input class="builder-input" id="dt-minute" type="number" min="0" max="59" placeholder="2" />
+                  </div>
+                  <div class="tool-date-field">
+                    <label class="builder-field-label" for="dt-second">Sec</label>
+                    <input class="builder-input" id="dt-second" type="number" min="0" max="59" placeholder="54" />
+                  </div>
+                  <div class="tool-date-field tool-date-field-tz">
+                    <label class="builder-field-label" for="dt-tz">TZ</label>
+                    <select class="builder-select" id="dt-tz">
+                      <option value="gmt">GMT</option>
+                      <option value="local">Local</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="tool-form-actions">
+                  <button class="btn" id="btn-date-now">Use Now</button>
+                  <button class="btn btn-accent" id="btn-date-to-epoch">Convert</button>
+                </div>
+              </div>
+              <div class="tool-result tool-result-compact" id="date-to-epoch-result" style="display:none;">
+                <div class="tool-result-row">
+                  <span class="tool-result-label">Epoch (seconds)</span>
+                  <span class="tool-result-value tool-result-mono" id="date-epoch-value"></span>
+                </div>
+                <div class="tool-result-row">
+                  <span class="tool-result-label">Milliseconds</span>
+                  <span class="tool-result-value tool-result-mono" id="date-epoch-ms"></span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 

@@ -148,6 +148,9 @@ Today is {{ greeting }}.
     // Builder
     initBuilder();
 
+    // Tools
+    initTools();
+
     // Initial lint if editor has content
     if (editor.getValue().trim()) {
       runLint();
@@ -390,6 +393,172 @@ Today is {{ greeting }}.
       }
     });
     return values;
+  }
+
+  // ─── Tools ────────────────────────────────────────────────
+  function initTools() {
+    const minutesInput = document.getElementById('minutes-input');
+    const convertBtn = document.getElementById('btn-convert-minutes');
+    const resultEl = document.getElementById('minutes-result');
+    const resultTime = document.getElementById('minutes-result-time');
+    const resultDetail = document.getElementById('minutes-result-detail');
+
+    function convertMinutes(totalMinutes) {
+      totalMinutes = Math.floor(Number(totalMinutes));
+      if (isNaN(totalMinutes) || totalMinutes < 0 || totalMinutes > 1439) return null;
+
+      const hours24 = Math.floor(totalMinutes / 60);
+      const mins = totalMinutes % 60;
+      const period = hours24 < 12 ? 'AM' : 'PM';
+      let hours12 = hours24 % 12;
+      if (hours12 === 0) hours12 = 12;
+
+      const timeStr = hours12 + ':' + String(mins).padStart(2, '0') + ' ' + period;
+      const time24 = String(hours24).padStart(2, '0') + ':' + String(mins).padStart(2, '0');
+      return { timeStr, time24, hours24, mins, totalMinutes };
+    }
+
+    function showResult(totalMinutes) {
+      const result = convertMinutes(totalMinutes);
+      if (!result) {
+        resultEl.style.display = 'none';
+        return;
+      }
+      resultTime.textContent = result.timeStr;
+      resultDetail.textContent = result.totalMinutes + ' minutes since midnight = ' + result.time24 + ' (24h format)';
+      resultEl.style.display = '';
+    }
+
+    convertBtn.addEventListener('click', () => showResult(minutesInput.value));
+
+    minutesInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') showResult(minutesInput.value);
+    });
+
+    // Clicking example chips
+    document.querySelectorAll('.tool-example-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const mins = chip.dataset.minutes;
+        minutesInput.value = mins;
+        showResult(mins);
+      });
+    });
+
+    // ── Epoch Timestamp Converter ──
+    const epochInput = document.getElementById('epoch-input');
+    const epochToDateBtn = document.getElementById('btn-epoch-to-date');
+    const epochToDateResult = document.getElementById('epoch-to-date-result');
+    const epochGmtTime = document.getElementById('epoch-gmt-time');
+    const epochLocalTime = document.getElementById('epoch-local-time');
+    const epochLocalDetail = document.getElementById('epoch-local-detail');
+
+    function formatDateParts(date, timeZone) {
+      var opts = {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false, timeZone: timeZone
+      };
+      return date.toLocaleString('en-GB', opts);
+    }
+
+    function getLocalTzLabel() {
+      try {
+        var offset = new Date().getTimezoneOffset();
+        var sign = offset <= 0 ? '+' : '-';
+        var absOff = Math.abs(offset);
+        var h = String(Math.floor(absOff / 60)).padStart(2, '0');
+        var m = String(absOff % 60).padStart(2, '0');
+        return 'GMT' + sign + h + ':' + m;
+      } catch (e) {
+        return 'Local';
+      }
+    }
+
+    function showEpochToDate(value) {
+      var ts = Number(value);
+      if (isNaN(ts) || value === '') {
+        epochToDateResult.style.display = 'none';
+        return;
+      }
+      // Auto-detect seconds vs milliseconds: if > 10 digits, treat as ms
+      var ms = String(Math.abs(ts)).length > 10 ? ts : ts * 1000;
+      var date = new Date(ms);
+      if (isNaN(date.getTime())) {
+        epochToDateResult.style.display = 'none';
+        return;
+      }
+
+      epochGmtTime.textContent = formatDateParts(date, 'UTC');
+
+      var tzLabel = getLocalTzLabel();
+      epochLocalTime.textContent = formatDateParts(date, undefined);
+      epochLocalDetail.textContent = 'Your TZ (' + tzLabel + ')';
+
+      epochToDateResult.style.display = '';
+    }
+
+    epochToDateBtn.addEventListener('click', function () { showEpochToDate(epochInput.value); });
+    epochInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') showEpochToDate(epochInput.value);
+    });
+
+    // ── Date → Epoch ──
+    var dtYear = document.getElementById('dt-year');
+    var dtMonth = document.getElementById('dt-month');
+    var dtDay = document.getElementById('dt-day');
+    var dtHour = document.getElementById('dt-hour');
+    var dtMinute = document.getElementById('dt-minute');
+    var dtSecond = document.getElementById('dt-second');
+    var dtTz = document.getElementById('dt-tz');
+    var dateToEpochBtn = document.getElementById('btn-date-to-epoch');
+    var dateNowBtn = document.getElementById('btn-date-now');
+    var dateToEpochResult = document.getElementById('date-to-epoch-result');
+    var dateEpochValue = document.getElementById('date-epoch-value');
+    var dateEpochMs = document.getElementById('date-epoch-ms');
+
+    function showDateToEpoch() {
+      var y = parseInt(dtYear.value, 10);
+      var mo = parseInt(dtMonth.value, 10);
+      var d = parseInt(dtDay.value, 10);
+      var h = parseInt(dtHour.value, 10) || 0;
+      var mi = parseInt(dtMinute.value, 10) || 0;
+      var s = parseInt(dtSecond.value, 10) || 0;
+
+      if (isNaN(y) || isNaN(mo) || isNaN(d)) {
+        dateToEpochResult.style.display = 'none';
+        return;
+      }
+
+      var date;
+      if (dtTz.value === 'gmt') {
+        date = new Date(Date.UTC(y, mo - 1, d, h, mi, s));
+      } else {
+        date = new Date(y, mo - 1, d, h, mi, s);
+      }
+
+      if (isNaN(date.getTime())) {
+        dateToEpochResult.style.display = 'none';
+        return;
+      }
+
+      var epoch = Math.floor(date.getTime() / 1000);
+      dateEpochValue.textContent = epoch;
+      dateEpochMs.textContent = date.getTime();
+      dateToEpochResult.style.display = '';
+    }
+
+    dateToEpochBtn.addEventListener('click', showDateToEpoch);
+    dateNowBtn.addEventListener('click', function () {
+      var now = new Date();
+      dtYear.value = now.getFullYear();
+      dtMonth.value = now.getMonth() + 1;
+      dtDay.value = now.getDate();
+      dtHour.value = now.getHours();
+      dtMinute.value = now.getMinutes();
+      dtSecond.value = now.getSeconds();
+      dtTz.value = 'local';
+      showDateToEpoch();
+    });
   }
 
   // ─── Lint runner ───────────────────────────────────────────
