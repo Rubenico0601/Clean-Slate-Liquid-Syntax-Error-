@@ -46,7 +46,7 @@
   You've earned a reward! Use code: {{ Event.reward_code | upcase }}
 {% endif %}
 
-{% assign greeting = "now" | date: "%B %d, %Y" %}
+{% assign greeting = now | date: "%B %d, %Y" %}
 Today is {{ greeting }}.
 
 {% case Profile.Language %}

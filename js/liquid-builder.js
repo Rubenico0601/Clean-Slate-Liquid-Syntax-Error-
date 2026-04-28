@@ -213,15 +213,15 @@ const LiquidBuilder = (function () {
         'BRT — Brazil (UTC-3)':               [-10800, -10800],     // No DST
       },
       fields: [
-        { id: 'source', label: 'Date Source', type: 'select', options: ['"now" (current date)', 'Event property', 'Profile property'], default: '"now" (current date)' },
-        { id: 'property', label: 'Property (if not "now")', type: 'text', placeholder: 'e.g., Event.purchase_date', default: '' },
+        { id: 'source', label: 'Date Source', type: 'select', options: ['now (current date)', 'Event property', 'Profile property'], default: 'now (current date)' },
+        { id: 'property', label: 'Property (if not now)', type: 'text', placeholder: 'e.g., Event.purchase_date', default: '' },
         { id: 'format', label: 'Date Format', type: 'select', options: ['%B %d, %Y (March 31, 2026)', '%m/%d/%Y (03/31/2026)', '%d/%m/%Y (31/03/2026)', '%Y-%m-%d (2026-03-31)', '%b %d (Mar 31)', '%A, %B %d (%A full weekday)', '%H:%M (24h time)', '%I:%M %p (12h time)'], default: '%B %d, %Y (March 31, 2026)' },
         { id: 'timezone', label: 'Recipient Timezone', type: 'select', options: ['IST — India (UTC+5:30)', 'UTC (UTC+0)', 'EST — US Eastern (UTC-5)', 'CST — US Central (UTC-6)', 'MST — US Mountain (UTC-7)', 'PST — US Pacific (UTC-8)', 'GMT — UK (UTC+0)', 'CET — Central Europe (UTC+1)', 'EET — Eastern Europe (UTC+2)', 'JST — Japan (UTC+9)', 'AEST — Australia Eastern (UTC+10)', 'NZST — New Zealand (UTC+12)', 'GST — Gulf / UAE (UTC+4)', 'SGT — Singapore (UTC+8)', 'CST — China (UTC+8)', 'WIB — Indonesia Western (UTC+7)', 'BRT — Brazil (UTC-3)'], default: 'IST — India (UTC+5:30)' },
         { id: 'dst', label: 'Daylight Saving Time active?', type: 'select', options: ['No', 'Yes'], default: 'No' },
       ],
       generate(values) {
         const fmt = values.format.split(' (')[0];
-        let source = '"now"';
+        let source = 'now';
         if (values.source.startsWith('Event') && values.property) source = values.property;
         else if (values.source.startsWith('Profile') && values.property) source = values.property;
 
