@@ -66,6 +66,9 @@
       <button class="tab-btn" data-tab="tools">
         <span class="tab-icon">&#9874;</span> Tools
       </button>
+      <button class="tab-btn" data-tab="variables">
+        <span class="tab-icon">&#8635;</span> Variables
+      </button>
     </nav>
 
     <!-- ═══ Tab: Linter ═══════════════════════════════════ -->
@@ -277,6 +280,67 @@
           </div>
         </div>
 
+      </div>
+    </div>
+
+    <!-- ═══ Tab: Variables ═════════════════════════════════ -->
+    <div class="tab-content" id="tab-variables">
+      <div class="vars-layout">
+        <div class="vars-col vars-col-input">
+          <div class="vars-card">
+            <div class="vars-card-header">
+              <div class="vars-card-title">Template Source</div>
+              <div class="vars-card-actions">
+                <button class="btn" id="vars-sample">Sample</button>
+                <button class="btn" id="vars-clear">Clear</button>
+                <button class="btn btn-accent" id="vars-analyze">Analyze</button>
+              </div>
+            </div>
+            <textarea
+              class="vars-textarea"
+              id="vars-source"
+              spellcheck="false"
+              placeholder="Paste your HTML or Liquid template here. Click Analyze to detect Profile/Event/Linked tokens, assigned string literals, image URLs, and anchor URLs."
+            ></textarea>
+          </div>
+
+          <div class="vars-card vars-card-output" id="vars-output-card" style="display:none;">
+            <div class="vars-card-header">
+              <div class="vars-card-title">Modified Template</div>
+              <div class="vars-card-actions">
+                <button class="btn" id="vars-copy-output">Copy</button>
+                <button class="btn" id="vars-send-linter">Send to Linter</button>
+              </div>
+            </div>
+            <textarea
+              class="vars-textarea vars-textarea-output"
+              id="vars-output"
+              spellcheck="false"
+              readonly
+            ></textarea>
+          </div>
+        </div>
+
+        <div class="vars-col vars-col-side">
+          <div class="vars-card">
+            <div class="vars-card-header">
+              <div class="vars-card-title">Detected Variables</div>
+              <div class="vars-card-actions">
+                <span class="vars-summary" id="vars-summary">No analysis yet</span>
+              </div>
+            </div>
+            <div class="vars-list" id="vars-list">
+              <div class="vars-empty">
+                Paste a template on the left and click <strong>Analyze</strong>.<br/>
+                Detected swappable values will appear here grouped by category.
+              </div>
+            </div>
+            <div class="vars-apply-bar" id="vars-apply-bar" style="display:none;">
+              <button class="btn btn-accent" id="vars-apply">Apply Replacements</button>
+              <button class="btn" id="vars-reset-edits">Reset Edits</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -519,6 +583,7 @@ Hello, {{ name }}!</pre>
   <script src="js/liquid-linter.js"></script>
   <script src="js/leanplum-converter.js"></script>
   <script src="js/liquid-builder.js"></script>
+  <script src="js/variable-inspector.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

@@ -1,3 +1,4 @@
 .claude/
 incorrect_html.txt
 worker/.wrangler/
+worker-mcp/.wrangler/

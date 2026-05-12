@@ -151,6 +151,9 @@ Today is {{ greeting }}.
     // Tools
     initTools();
 
+    // Variables
+    initVariables();
+
     // Initial lint if editor has content
     if (editor.getValue().trim()) {
       runLint();
@@ -558,6 +561,173 @@ Today is {{ greeting }}.
       dtSecond.value = now.getSeconds();
       dtTz.value = 'local';
       showDateToEpoch();
+    });
+  }
+
+  // ─── Variable Inspector ────────────────────────────────────
+  function initVariables() {
+    const inspector = new VariableInspector();
+    const sourceEl = document.getElementById('vars-source');
+    const listEl = document.getElementById('vars-list');
+    const summaryEl = document.getElementById('vars-summary');
+    const applyBar = document.getElementById('vars-apply-bar');
+    const outputCard = document.getElementById('vars-output-card');
+    const outputEl = document.getElementById('vars-output');
+    const analyzeBtn = document.getElementById('vars-analyze');
+    const clearBtn = document.getElementById('vars-clear');
+    const sampleBtn = document.getElementById('vars-sample');
+    const applyBtn = document.getElementById('vars-apply');
+    const resetBtn = document.getElementById('vars-reset-edits');
+    const copyBtn = document.getElementById('vars-copy-output');
+    const sendBtn = document.getElementById('vars-send-linter');
+
+    let lastInspection = null;
+    let lastSource = '';
+
+    const SAMPLE = `{% assign playlistObject = Profile["Array-Test"] %}
+{% if playlistObject == "null" %}{% abort %}{% endif %}
+{% assign playData = Linked.playlist_data_TEST %}
+{% assign series_id_bank = "21796,73706,72002" | split: "," %}
+{% assign series_name_bank = "Outlander,The Nowhere Man,Spartacus: House of Ashur" | split: "," %}
+
+<a href="https://www.starz.com/us/en/?utm_campaign=lcm-playlist-2-b">
+  <img src="https://stz1.imgix.net/web/contentId/{{ Content_Id }}/type/KEY/dimension/2560x1440" alt="Hero" />
+</a>
+<a href="https://www.starz.com/us/en/privacy">Privacy</a>
+Welcome {{ Profile.first_name }} — your playlist starts with {{ playData.playContents[0].title }}.`;
+
+    function render(inspection) {
+      const totalItems = inspection.categories.reduce((n, c) => n + c.items.length, 0);
+
+      if (totalItems === 0) {
+        listEl.innerHTML = `<div class="vars-empty">No swappable variables detected. The template may be plain HTML or use unsupported patterns.</div>`;
+        summaryEl.textContent = '0 variables';
+        applyBar.style.display = 'none';
+        return;
+      }
+
+      let html = '';
+      for (const cat of inspection.categories) {
+        if (cat.items.length === 0) continue;
+        html += `<div class="vars-group">
+          <div class="vars-group-header">
+            <span class="vars-group-title">${escapeHtml(cat.title)}</span>
+            <span class="vars-group-count">${cat.items.length}</span>
+          </div>
+          <div class="vars-group-hint">${escapeHtml(cat.hint)}</div>`;
+        for (const item of cat.items) {
+          const subtypeLabel = item.subtype || cat.key;
+          html += `<div class="vars-item" data-item-id="${escapeAttr(item.id)}">
+            <div class="vars-item-row">
+              <div class="vars-item-label">
+                <span class="vars-item-subtype ${escapeAttr(subtypeLabel)}">${escapeHtml(subtypeLabel)}</span>
+                <span>${escapeHtml(item.label)}</span>
+              </div>
+              <span class="vars-item-count">${item.count}&times;</span>
+            </div>
+            <input
+              type="text"
+              class="vars-item-input"
+              data-item-id="${escapeAttr(item.id)}"
+              data-current="${escapeAttr(item.currentValue)}"
+              placeholder="${escapeAttr('New ' + (item.editableHint || 'value'))}"
+            />
+            <div class="vars-item-current">current: ${escapeHtml(item.currentValue)}</div>
+          </div>`;
+        }
+        html += `</div>`;
+      }
+      listEl.innerHTML = html;
+      summaryEl.textContent = `${totalItems} variable${totalItems === 1 ? '' : 's'} across ${inspection.categories.filter(c => c.items.length > 0).length} categories`;
+      applyBar.style.display = '';
+
+      // Dirty-state highlighting
+      listEl.querySelectorAll('.vars-item-input').forEach(inp => {
+        inp.addEventListener('input', () => {
+          const current = inp.dataset.current;
+          if (inp.value.trim() !== '' && inp.value !== current) {
+            inp.classList.add('dirty');
+          } else {
+            inp.classList.remove('dirty');
+          }
+        });
+      });
+    }
+
+    function collectEdits() {
+      const edits = {};
+      listEl.querySelectorAll('.vars-item-input').forEach(inp => {
+        const v = inp.value.trim();
+        if (v !== '' && v !== inp.dataset.current) {
+          edits[inp.dataset.itemId] = v;
+        }
+      });
+      return edits;
+    }
+
+    analyzeBtn.addEventListener('click', () => {
+      const src = sourceEl.value;
+      if (!src.trim()) {
+        listEl.innerHTML = `<div class="vars-empty">Paste a template first, then click Analyze.</div>`;
+        summaryEl.textContent = 'No analysis yet';
+        applyBar.style.display = 'none';
+        outputCard.style.display = 'none';
+        return;
+      }
+      lastSource = src;
+      lastInspection = inspector.inspect(src);
+      render(lastInspection);
+      outputCard.style.display = 'none';
+    });
+
+    applyBtn.addEventListener('click', () => {
+      if (!lastInspection) return;
+      const edits = collectEdits();
+      const items = inspector.flattenItems(lastInspection);
+      const modified = inspector.apply(lastSource, items, edits);
+      outputEl.value = modified;
+      outputCard.style.display = '';
+      // Scroll output into view
+      outputEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+
+    resetBtn.addEventListener('click', () => {
+      listEl.querySelectorAll('.vars-item-input').forEach(inp => {
+        inp.value = '';
+        inp.classList.remove('dirty');
+      });
+      outputCard.style.display = 'none';
+    });
+
+    clearBtn.addEventListener('click', () => {
+      sourceEl.value = '';
+      listEl.innerHTML = `<div class="vars-empty">Paste a template on the left and click <strong>Analyze</strong>.<br/>Detected swappable values will appear here grouped by category.</div>`;
+      summaryEl.textContent = 'No analysis yet';
+      applyBar.style.display = 'none';
+      outputCard.style.display = 'none';
+      lastInspection = null;
+      lastSource = '';
+    });
+
+    sampleBtn.addEventListener('click', () => {
+      sourceEl.value = SAMPLE;
+      analyzeBtn.click();
+    });
+
+    copyBtn.addEventListener('click', () => {
+      const text = outputEl.value;
+      if (!text) return;
+      navigator.clipboard.writeText(text).then(() => {
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+      });
+    });
+
+    sendBtn.addEventListener('click', () => {
+      const text = outputEl.value;
+      if (!text) return;
+      editor.setValue(text);
+      document.querySelector('.tab-btn[data-tab="linter"]').click();
     });
   }
 
