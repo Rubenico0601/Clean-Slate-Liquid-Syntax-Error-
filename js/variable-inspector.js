@@ -86,11 +86,14 @@ class VariableInspector {
       const attr = m[2];
       const key = `Profile|${attr}`;
       if (map.has(key)) {
-        // Same attribute already seen via dot syntax — merge the occurrence
+        // Same attribute already seen — merge the occurrence
         const existing = map.get(key);
         existing.occurrences.push({ original: m[0], renderNew: (val) => `Profile[${quote}${val}${quote}]` });
         existing.count += 1;
-        existing.label = `Profile["${attr}"] / Profile.${attr}`;
+        // Only upgrade label if the existing entry was added by the DOT loop
+        if (existing.label === `Profile.${attr}`) {
+          existing.label = `Profile["${attr}"] / Profile.${attr}`;
+        }
       } else {
         add(key, {
           id: `token_profile_${attr.replace(/[^A-Za-z0-9]/g, '_')}`,
@@ -107,7 +110,7 @@ class VariableInspector {
       }
     }
 
-    // Event.X or Event.X.Y
+    // Event.X or Event.X.Y (dot)
     for (const m of source.matchAll(/\bEvent\.([A-Za-z_][A-Za-z0-9_]*)(?:\.([A-Za-z_][A-Za-z0-9_]*))?\b/g)) {
       const eventName = m[1];
       const propName = m[2];
@@ -127,7 +130,39 @@ class VariableInspector {
       });
     }
 
-    // Linked.X
+    // Event["X"] / Event['X'] (bracket) — needed for keys with hyphens,
+    // spaces, or any chars that aren't valid bare identifiers.
+    for (const m of source.matchAll(/\bEvent\[(['"])([^'"\]]+)\1\]/g)) {
+      const quote = m[1];
+      const attr = m[2];
+      const key = `Event|${attr}|`;
+      if (map.has(key)) {
+        const existing = map.get(key);
+        existing.occurrences.push({
+          original: m[0],
+          renderNew: (val) => `Event[${quote}${val}${quote}]`,
+        });
+        existing.count += 1;
+        if (existing.label === `Event.${attr}`) {
+          existing.label = `Event["${attr}"] / Event.${attr}`;
+        }
+      } else {
+        add(key, {
+          id: `token_event_${attr.replace(/[^A-Za-z0-9_]/g, '_')}`,
+          subtype: 'Event',
+          label: `Event["${attr}"]`,
+          currentValue: attr,
+          editableHint: 'event name',
+          count: 1,
+          occurrences: [{
+            original: m[0],
+            renderNew: (val) => `Event[${quote}${val}${quote}]`,
+          }],
+        });
+      }
+    }
+
+    // Linked.X (dot)
     for (const m of source.matchAll(/\bLinked\.([A-Za-z_][A-Za-z0-9_]*)\b/g)) {
       const key = m[1];
       add(`Linked|${key}`, {
@@ -142,6 +177,37 @@ class VariableInspector {
           renderNew: (val) => `Linked.${val}`,
         }],
       });
+    }
+
+    // Linked["X"] / Linked['X'] (bracket)
+    for (const m of source.matchAll(/\bLinked\[(['"])([^'"\]]+)\1\]/g)) {
+      const quote = m[1];
+      const attr = m[2];
+      const key = `Linked|${attr}`;
+      if (map.has(key)) {
+        const existing = map.get(key);
+        existing.occurrences.push({
+          original: m[0],
+          renderNew: (val) => `Linked[${quote}${val}${quote}]`,
+        });
+        existing.count += 1;
+        if (existing.label === `Linked.${attr}`) {
+          existing.label = `Linked["${attr}"] / Linked.${attr}`;
+        }
+      } else {
+        add(key, {
+          id: `token_linked_${attr.replace(/[^A-Za-z0-9_]/g, '_')}`,
+          subtype: 'Linked',
+          label: `Linked["${attr}"]`,
+          currentValue: attr,
+          editableHint: 'linked content key',
+          count: 1,
+          occurrences: [{
+            original: m[0],
+            renderNew: (val) => `Linked[${quote}${val}${quote}]`,
+          }],
+        });
+      }
     }
 
     // Sort by subtype then label so output is stable and readable

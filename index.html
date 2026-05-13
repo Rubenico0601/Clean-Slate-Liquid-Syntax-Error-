@@ -69,6 +69,9 @@
       <button class="tab-btn" data-tab="variables">
         <span class="tab-icon">&#8635;</span> Variables
       </button>
+      <button class="tab-btn" data-tab="preview">
+        <span class="tab-icon">&#9728;</span> Preview
+      </button>
     </nav>
 
     <!-- ═══ Tab: Linter ═══════════════════════════════════ -->
@@ -344,6 +347,66 @@
       </div>
     </div>
 
+    <!-- ═══ Tab: Preview ════════════════════════════════════ -->
+    <div class="tab-content" id="tab-preview">
+      <div class="preview-layout">
+        <div class="preview-col preview-col-input">
+          <div class="preview-card preview-source-card">
+            <div class="preview-card-header">
+              <div class="preview-card-title">Template Source</div>
+              <div class="preview-card-actions">
+                <button class="btn" id="preview-sample">Sample</button>
+                <button class="btn" id="preview-clear">Clear</button>
+                <button class="btn btn-accent" id="preview-detect">Detect Variables</button>
+              </div>
+            </div>
+            <textarea
+              class="preview-textarea"
+              id="preview-source"
+              spellcheck="false"
+              placeholder="Paste a CleverTap Liquid template (email HTML, push body, etc.). Click Detect Variables to auto-generate a mock-data form, then Render."
+            ></textarea>
+          </div>
+
+          <div class="preview-card preview-mock-card" id="preview-mock-card" style="display:none;">
+            <div class="preview-card-header">
+              <div class="preview-card-title">Mock Data</div>
+              <div class="preview-card-actions">
+                <span class="preview-summary" id="preview-summary"></span>
+                <button class="btn" id="preview-reset-mock">Reset</button>
+                <button class="btn btn-accent" id="preview-render">Render</button>
+              </div>
+            </div>
+            <div class="preview-mock-list" id="preview-mock-list"></div>
+          </div>
+        </div>
+
+        <div class="preview-col preview-col-output">
+          <div class="preview-card preview-output-card">
+            <div class="preview-card-header">
+              <div class="preview-card-title">Rendered Output</div>
+              <div class="preview-card-actions">
+                <button class="btn preview-view-btn active" id="preview-view-html" data-view="html">Rendered</button>
+                <button class="btn preview-view-btn" id="preview-view-source" data-view="source">Source</button>
+                <button class="btn" id="preview-copy-output">Copy</button>
+              </div>
+            </div>
+            <div class="preview-output-status" id="preview-output-status">
+              Click <strong>Render</strong> to see the output here.
+            </div>
+            <iframe
+              class="preview-iframe"
+              id="preview-iframe"
+              sandbox="allow-same-origin"
+              style="display:none;"
+              title="Rendered template output"
+            ></iframe>
+            <pre class="preview-output-source" id="preview-output-source" style="display:none;"></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ═══ Tab: Reference ════════════════════════════════ -->
     <div class="tab-content" id="tab-reference">
       <div class="reference-layout">
@@ -580,10 +643,12 @@ Hello, {{ name }}!</pre>
   </script>
 
   <!-- App -->
+  <script src="https://cdn.jsdelivr.net/npm/liquidjs@10.16.1/dist/liquid.browser.min.js"></script>
   <script src="js/liquid-linter.js"></script>
   <script src="js/leanplum-converter.js"></script>
   <script src="js/liquid-builder.js"></script>
   <script src="js/variable-inspector.js"></script>
+  <script src="js/template-renderer.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

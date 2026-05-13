@@ -154,6 +154,9 @@ Today is {{ greeting }}.
     // Variables
     initVariables();
 
+    // Preview
+    initPreview();
+
     // Initial lint if editor has content
     if (editor.getValue().trim()) {
       runLint();
@@ -728,6 +731,242 @@ Welcome {{ Profile.first_name }} — your playlist starts with {{ playData.playC
       if (!text) return;
       editor.setValue(text);
       document.querySelector('.tab-btn[data-tab="linter"]').click();
+    });
+  }
+
+  // ─── Preview (Live Renderer) ───────────────────────────────
+  function initPreview() {
+    const inspector = new VariableInspector();
+    let renderer;
+    try {
+      renderer = new TemplateRenderer();
+    } catch (e) {
+      // LiquidJS not loaded — degrade gracefully
+      console.error(e);
+    }
+
+    const sourceEl = document.getElementById('preview-source');
+    const mockCard = document.getElementById('preview-mock-card');
+    const mockListEl = document.getElementById('preview-mock-list');
+    const summaryEl = document.getElementById('preview-summary');
+    const statusEl = document.getElementById('preview-output-status');
+    const iframeEl = document.getElementById('preview-iframe');
+    const sourceOutEl = document.getElementById('preview-output-source');
+    const detectBtn = document.getElementById('preview-detect');
+    const sampleBtn = document.getElementById('preview-sample');
+    const clearBtn = document.getElementById('preview-clear');
+    const renderBtn = document.getElementById('preview-render');
+    const resetBtn = document.getElementById('preview-reset-mock');
+    const copyBtn = document.getElementById('preview-copy-output');
+    const viewBtns = document.querySelectorAll('.preview-view-btn');
+
+    let lastInspection = null;
+    let lastFlatItems = [];
+    let lastOutput = '';
+
+    const SAMPLE = `<!doctype html>
+<html><body style="font-family: sans-serif; padding: 24px; max-width: 600px; margin: 0 auto;">
+  <h1 style="color: #163b50;">Hi {{ Profile.first_name | default: "there" }} 👋</h1>
+
+  {% if Profile.country == "IN" %}
+    <p>Special launch offer for India: enjoy 30% off your next purchase.</p>
+  {% elsif Profile.country == "US" %}
+    <p>US members get free shipping this weekend only.</p>
+  {% else %}
+    <p>Welcome back! Check out what's new on STARZ.</p>
+  {% endif %}
+
+  {% if Profile.last_watched %}
+    <p>Pick up where you left off: <strong>{{ Profile.last_watched }}</strong></p>
+  {% endif %}
+
+  <p style="margin-top: 24px;">
+    <a href="https://www.starz.com/?utm_campaign={{ Event.send.campaign_id | default: 'default' }}"
+       style="background: #163b50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px;">
+      Open the app
+    </a>
+  </p>
+
+  <p style="color: #999; font-size: 12px; margin-top: 32px;">
+    Sent on {{ now | date: "%B %d, %Y" }}.
+  </p>
+</body></html>`;
+
+    function setStatus(html, className) {
+      statusEl.style.display = '';
+      iframeEl.style.display = 'none';
+      sourceOutEl.style.display = 'none';
+      statusEl.className = 'preview-output-status' + (className ? ' ' + className : '');
+      statusEl.innerHTML = html;
+    }
+
+    function showOutput(html, view) {
+      lastOutput = html;
+      statusEl.style.display = 'none';
+      if (view === 'source') {
+        sourceOutEl.style.display = '';
+        iframeEl.style.display = 'none';
+        sourceOutEl.textContent = html;
+      } else {
+        iframeEl.style.display = '';
+        sourceOutEl.style.display = 'none';
+        iframeEl.srcdoc = html;
+      }
+    }
+
+    function renderMockForm(inspection) {
+      const profile = [], event = [], linked = [];
+      for (const cat of inspection.categories) {
+        for (const item of cat.items) {
+          if (item.subtype === 'Profile') profile.push(item);
+          else if (item.subtype === 'Event') event.push(item);
+          else if (item.subtype === 'Linked') linked.push(item);
+        }
+      }
+
+      const total = profile.length + event.length + linked.length;
+      if (total === 0) {
+        mockListEl.innerHTML = `<div class="vars-empty">No Profile / Event / Linked references detected. The template will render with no personalisation data.</div>`;
+        summaryEl.textContent = '0 variables';
+        return;
+      }
+
+      let html = '';
+      const renderGroup = (label, subtype, items) => {
+        if (items.length === 0) return '';
+        let g = `<div class="preview-mock-group"><div class="preview-mock-group-title">${escapeHtml(label)}</div>`;
+        for (const item of items) {
+          const isLinked = subtype === 'Linked';
+          g += `<div class="preview-mock-item">
+            <div class="preview-mock-label">
+              <span class="vars-item-subtype ${escapeAttr(subtype)}">${escapeHtml(subtype)}</span>
+              <span>${escapeHtml(item.label)}</span>
+            </div>`;
+          if (isLinked) {
+            g += `<textarea
+              class="preview-mock-input preview-mock-textarea"
+              data-item-id="${escapeAttr(item.id)}"
+              placeholder='{"playContents": [{"title": "Example", "logLine": "..."}]}'
+            ></textarea>
+            <div class="preview-mock-hint">JSON. Leave blank to set this linked content to null.</div>`;
+          } else {
+            g += `<input
+              type="text"
+              class="preview-mock-input"
+              data-item-id="${escapeAttr(item.id)}"
+              placeholder="${escapeAttr('Value for ' + item.label)}"
+            />
+            <div class="preview-mock-hint">Plain text by default. Numbers auto-detect. Wrap in <code>[ ]</code> or <code>{ }</code> for JSON.</div>`;
+          }
+          g += `</div>`;
+        }
+        g += `</div>`;
+        return g;
+      };
+
+      html += renderGroup('Profile', 'Profile', profile);
+      html += renderGroup('Event', 'Event', event);
+      html += renderGroup('Linked Content', 'Linked', linked);
+
+      mockListEl.innerHTML = html;
+      summaryEl.textContent = `${total} input${total === 1 ? '' : 's'}`;
+    }
+
+    function collectFormValues() {
+      const values = {};
+      mockListEl.querySelectorAll('[data-item-id]').forEach(el => {
+        values[el.dataset.itemId] = el.value;
+      });
+      return values;
+    }
+
+    detectBtn.addEventListener('click', () => {
+      const src = sourceEl.value;
+      if (!src.trim()) {
+        setStatus('Paste a template first, then click Detect Variables.', 'error');
+        mockCard.style.display = 'none';
+        return;
+      }
+      lastInspection = inspector.inspect(src);
+      lastFlatItems = inspector.flattenItems(lastInspection);
+      renderMockForm(lastInspection);
+      mockCard.style.display = '';
+      setStatus('Fill in the mock data above and click <strong>Render</strong>.');
+    });
+
+    renderBtn.addEventListener('click', async () => {
+      if (!renderer) {
+        setStatus('LiquidJS failed to load. Check your network or CDN access.', 'error');
+        return;
+      }
+      const src = sourceEl.value;
+      if (!src.trim()) {
+        setStatus('Paste a template first.', 'error');
+        return;
+      }
+      // Run with whatever inspection state we have; re-inspect if user changed source
+      if (!lastInspection) {
+        lastInspection = inspector.inspect(src);
+        lastFlatItems = inspector.flattenItems(lastInspection);
+      }
+      const values = collectFormValues();
+      const context = TemplateRenderer.buildContextFromInspection(lastInspection, values);
+
+      const result = await renderer.render(src, context);
+      if (!result.ok) {
+        const e = result.error;
+        const where = e.line ? ` (line ${e.line}${e.col ? ', col ' + e.col : ''})` : '';
+        setStatus(`<strong>${escapeHtml(e.name)}</strong>${escapeHtml(where)}<br/>${escapeHtml(e.message)}`, 'error');
+        return;
+      }
+      if (result.aborted) {
+        setStatus('Template hit <code>{% abort %}</code>. CleverTap would skip sending this message.', 'aborted');
+        return;
+      }
+      const activeView = document.querySelector('.preview-view-btn.active')?.dataset.view || 'html';
+      showOutput(result.output, activeView);
+    });
+
+    resetBtn.addEventListener('click', () => {
+      mockListEl.querySelectorAll('[data-item-id]').forEach(el => { el.value = ''; });
+    });
+
+    sampleBtn.addEventListener('click', () => {
+      sourceEl.value = SAMPLE;
+      detectBtn.click();
+      // Pre-fill the sample form with sensible defaults
+      mockListEl.querySelectorAll('[data-item-id]').forEach(el => {
+        const label = el.previousElementSibling?.textContent || '';
+        if (label.includes('first_name')) el.value = 'Ruben';
+        else if (label.includes('country')) el.value = 'IN';
+        else if (label.includes('last_watched')) el.value = 'Outlander S07E14';
+        else if (label.includes('campaign_id')) el.value = 'spring-launch';
+      });
+    });
+
+    clearBtn.addEventListener('click', () => {
+      sourceEl.value = '';
+      mockListEl.innerHTML = '';
+      mockCard.style.display = 'none';
+      lastInspection = null;
+      lastFlatItems = [];
+      setStatus('Click <strong>Render</strong> to see the output here.');
+    });
+
+    copyBtn.addEventListener('click', () => {
+      if (!lastOutput) return;
+      navigator.clipboard.writeText(lastOutput).then(() => {
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+      });
+    });
+
+    viewBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        viewBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        if (lastOutput) showOutput(lastOutput, btn.dataset.view);
+      });
     });
   }
 
