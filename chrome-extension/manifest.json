@@ -24,9 +24,7 @@
   },
   "permissions": [
     "activeTab",
-    "scripting",
-    "clipboardRead",
-    "offscreen"
+    "scripting"
   ],
   "host_permissions": [
     "https://app.getbee.io/*"
