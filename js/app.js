@@ -142,12 +142,14 @@ Today is {{ greeting }}.
     // Converter button
     document.getElementById('btn-convert').addEventListener('click', runConversion);
 
-    // Format button — also unwraps BEE/wrapper artifacts if present.
+    // Format button — formats only, NEVER strips content. (Unwrap is
+    // dangerous when applied to content the user pasted manually; it
+    // can delete everything outside the innermost <html> pair. It only
+    // runs on extension import, where we know the source is BEE.)
     document.getElementById('btn-format').addEventListener('click', () => {
       const current = editor.getValue();
       if (!current.trim()) return;
-      const unwrapped = unwrapNestedHtml(current);
-      const formatted = formatHtml(unwrapped);
+      const formatted = formatHtml(current);
       if (formatted !== current) {
         editor.setValue(formatted);
         runLint();
