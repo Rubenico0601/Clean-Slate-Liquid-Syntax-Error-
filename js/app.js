@@ -142,6 +142,17 @@ Today is {{ greeting }}.
     // Converter button
     document.getElementById('btn-convert').addEventListener('click', runConversion);
 
+    // Format button
+    document.getElementById('btn-format').addEventListener('click', () => {
+      const current = editor.getValue();
+      if (!current.trim()) return;
+      const formatted = formatHtml(current);
+      if (formatted !== current) {
+        editor.setValue(formatted);
+        runLint();
+      }
+    });
+
     // Tab switching
     initTabs();
 
@@ -198,12 +209,16 @@ Today is {{ greeting }}.
       const text = decodeBase64Utf8(encoded);
       // Scrub hash before setting value so a refresh starts clean
       history.replaceState(null, '', location.pathname + location.search);
-      editor.setValue(text);
+      // Imported content from the extension often comes from a
+      // contenteditable preview, which collapses whitespace. Auto-format
+      // it so the editor view is readable from the start.
+      const formatted = formatHtml(text);
+      editor.setValue(formatted);
       runLint();
-      const sizeKb = (text.length / 1024).toFixed(1);
+      const sizeKb = (formatted.length / 1024).toFixed(1);
       const expectedKb = reportedSize ? ` (extension reported ${(reportedSize / 1024).toFixed(1)} KB)` : '';
       showImportToast(
-        `Imported ${sizeKb} KB via <strong>${escapeHtml(reportedSource)}</strong>${expectedKb}.`,
+        `Imported ${sizeKb} KB via <strong>${escapeHtml(reportedSource)}</strong>${expectedKb}. Auto-formatted.`,
         'ok'
       );
     } catch (e) {
@@ -1517,6 +1532,91 @@ Welcome {{ Profile.first_name }} — your playlist starts with {{ playData.playC
 
   function escapeAttr(str) {
     return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // ─── HTML + Liquid formatter ──────────────────────────────
+  //
+  // Pretty-prints HTML and puts each block-level Liquid tag on its own
+  // line. Inline {{ output }} stays inline; the contents of <style>,
+  // <script>, <pre>, <textarea>, and HTML comments are preserved verbatim.
+  function formatHtml(source) {
+    if (!source || typeof source !== 'string') return source;
+
+    const LIQ = '\x00';
+    const PRES = '\x01';
+
+    // 1. Mask Liquid tags so HTML formatting doesn't disturb them.
+    const liquid = [];
+    let s = source.replace(/\{%-?[\s\S]*?-?%\}|\{\{-?[\s\S]*?-?\}\}/g, (m) => {
+      const i = liquid.length;
+      liquid.push(m);
+      return LIQ + i + LIQ;
+    });
+
+    // 2. Mask comments + bodies of <style>/<script>/<pre>/<textarea>.
+    const preserved = [];
+    s = s.replace(/<!--[\s\S]*?-->/g, (m) => {
+      const i = preserved.length;
+      preserved.push(m);
+      return PRES + i + PRES;
+    });
+    s = s.replace(/<(style|script|pre|textarea)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, (m) => {
+      const i = preserved.length;
+      preserved.push(m);
+      return PRES + i + PRES;
+    });
+
+    // 3. Break tag boundaries onto their own lines.
+    s = s.replace(/>\s*</g, '>\n<');
+
+    // 4. Split block-level Liquid tokens onto their own lines.
+    const LIQ_BLOCK = 'if|elsif|else|endif|unless|endunless|for|endfor|case|when|endcase|capture|endcapture|comment|endcomment|raw|endraw|assign|increment|decrement|abort|tablerow|endtablerow';
+    s = s.replace(new RegExp(LIQ + '(\\d+)' + LIQ, 'g'), (_m, i) => {
+      const original = liquid[+i];
+      const isBlock = new RegExp('^\\{%-?\\s*(?:' + LIQ_BLOCK + ')\\b').test(original);
+      return isBlock ? '\n' + LIQ + i + LIQ + '\n' : LIQ + i + LIQ;
+    });
+    // Break around preserved blocks too so they don't fuse with tags.
+    s = s.replace(new RegExp('>' + PRES, 'g'), '>\n' + PRES);
+    s = s.replace(new RegExp(PRES + '<', 'g'), PRES + '\n<');
+    s = s.replace(/\n+/g, '\n').trim();
+
+    // 5. Re-indent based on HTML tag depth.
+    const VOID = new Set(['br','hr','img','input','meta','link','area','base','col','embed','param','source','track','wbr']);
+    const INDENT = '  ';
+    const lines = s.split('\n').map((l) => l.trim()).filter(Boolean);
+    const out = [];
+    let depth = 0;
+
+    for (const line of lines) {
+      const isPreservedLine = new RegExp('^' + PRES + '\\d+' + PRES + '$').test(line);
+      const isLiquidLine = new RegExp('^' + LIQ + '\\d+' + LIQ + '$').test(line);
+      const isClosing = /^<\/[a-zA-Z]/.test(line);
+      const isOpening = /^<[a-zA-Z!]/.test(line);
+      const isDoctype = /^<!DOCTYPE\b/i.test(line);
+      const isSelfClosing = /\/\s*>$/.test(line);
+      const tagMatch = line.match(/^<\/?([a-zA-Z][a-zA-Z0-9-]*)/);
+      const tagName = tagMatch ? tagMatch[1].toLowerCase() : null;
+      const isVoid = !isClosing && tagName && VOID.has(tagName);
+      const isInlineClosed =
+        isOpening && tagName &&
+        new RegExp('</' + tagName + '\\s*>\\s*$', 'i').test(line);
+
+      if (isClosing) depth = Math.max(0, depth - 1);
+      out.push(INDENT.repeat(depth) + line);
+      if (isOpening && !isClosing && !isSelfClosing && !isVoid &&
+          !isDoctype && !isPreservedLine && !isLiquidLine && !isInlineClosed) {
+        depth++;
+      }
+    }
+
+    let result = out.join('\n');
+
+    // 6. Restore preserved + Liquid tokens.
+    result = result.replace(new RegExp(PRES + '(\\d+)' + PRES, 'g'), (_m, i) => preserved[+i]);
+    result = result.replace(new RegExp(LIQ + '(\\d+)' + LIQ, 'g'), (_m, i) => liquid[+i]);
+
+    return result;
   }
 
   // ─── Leanplum Converter ───────────────────────────────────
