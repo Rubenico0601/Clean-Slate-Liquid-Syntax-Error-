@@ -39,7 +39,7 @@ function extractTemplateFromPage() {
         return active.value.substring(s, e);
       }
     }
-    // 2. CodeMirror instance with a selection (returns FULL selected text)
+    // 2. CodeMirror 5 instance with a selection (returns FULL selected text)
     let best = null;
     for (const node of document.querySelectorAll('.CodeMirror')) {
       if (node.CodeMirror && typeof node.CodeMirror.somethingSelected === 'function') {
@@ -48,6 +48,20 @@ function extractTemplateFromPage() {
             const t = node.CodeMirror.getSelection();
             if (t && (!best || t.length > best.length)) best = t;
           }
+        } catch (e) { /* ignore */ }
+      }
+    }
+    if (best) return best;
+    // 2b. CodeMirror 6 (BEE Plugin uses this). Class is .cm-editor, the
+    // view is stored on a property of the DOM node — scan for an object
+    // with a .state.doc.sliceString shape (which is unique to CM6).
+    for (const root of document.querySelectorAll('.cm-editor')) {
+      const view = findCm6View(root);
+      const sel = view?.state?.selection?.main;
+      if (view && sel && sel.from !== sel.to && view.state.doc) {
+        try {
+          const t = view.state.doc.sliceString(sel.from, sel.to);
+          if (t && (!best || t.length > best.length)) best = t;
         } catch (e) { /* ignore */ }
       }
     }
@@ -99,6 +113,51 @@ function extractTemplateFromPage() {
     }
     return best;
   }
+
+  // CodeMirror 6 — completely different DOM/API. The editor is at
+  // .cm-editor; its EditorView is stashed on a property of that element
+  // (BEE Plugin uses this). We scan the element's own properties for
+  // anything with a .state.doc that can stringify the whole doc.
+  function findCm6View(root) {
+    if (!root) return null;
+    // Common direct property names.
+    const KEYS = ['cmView', '_view', 'editor', 'view', '__view', '_editor', 'editorView'];
+    const tryRead = (obj) => {
+      if (!obj) return null;
+      if (obj.state?.doc && typeof obj.state.doc.toString === 'function') return obj;
+      if (obj.view?.state?.doc && typeof obj.view.state.doc.toString === 'function') return obj.view;
+      if (obj.editorView?.state?.doc && typeof obj.editorView.state.doc.toString === 'function') return obj.editorView;
+      return null;
+    };
+    for (const k of KEYS) {
+      const v = tryRead(root[k]);
+      if (v) return v;
+    }
+    // Last resort: scan own property names for any value that looks like a view.
+    try {
+      for (const key of Object.getOwnPropertyNames(root)) {
+        try {
+          const v = tryRead(root[key]);
+          if (v) return v;
+        } catch (e) { /* getter may throw */ }
+      }
+    } catch (e) { /* ignore */ }
+    return null;
+  }
+
+  function fromCm6() {
+    let best = null;
+    for (const root of document.querySelectorAll('.cm-editor')) {
+      const view = findCm6View(root);
+      if (view?.state?.doc) {
+        try {
+          const t = view.state.doc.toString();
+          if (t && (!best || t.length > best.length)) best = t;
+        } catch (e) { /* ignore */ }
+      }
+    }
+    return best;
+  }
   function fromMonaco() {
     if (typeof window.monaco === 'undefined' || !window.monaco.editor) return null;
     try {
@@ -142,6 +201,7 @@ function extractTemplateFromPage() {
     { source: 'selection', value: fromSelection() },
     { source: 'active-element', value: fromActiveTextarea() },
     { source: 'codemirror', value: fromCodeMirror() },
+    { source: 'cm6', value: fromCm6() },
     { source: 'monaco', value: fromMonaco() },
     { source: 'ace', value: fromAce() },
     { source: 'contenteditable', value: fromBigContentEditable() },
