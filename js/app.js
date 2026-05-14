@@ -157,9 +157,71 @@ Today is {{ greeting }}.
     // Preview
     initPreview();
 
+    // Pre-fill from URL hash (used by the CleanSlate Chrome extension
+    // to hand off a template extracted from the CleverTap dashboard).
+    importTemplateFromUrlHash();
+
     // Initial lint if editor has content
     if (editor.getValue().trim()) {
       runLint();
+    }
+  }
+
+  // ─── URL-hash template import ─────────────────────────────
+  // Format: #template=<urlencoded-base64-utf8>
+  //         #err=<reason>   (e.g. err=toobig)
+  function importTemplateFromUrlHash() {
+    const hash = window.location.hash || '';
+    if (!hash || hash.length <= 1) return;
+    const params = new URLSearchParams(hash.substring(1));
+
+    const err = params.get('err');
+    if (err) {
+      showImportToast(
+        err === 'toobig'
+          ? 'Template was too large to import via URL. Please paste it manually below.'
+          : 'Could not import template (' + err + '). Please paste it manually.',
+        'warn'
+      );
+      // Scrub hash so refresh doesn't repeat
+      history.replaceState(null, '', location.pathname + location.search);
+      return;
+    }
+
+    const encoded = params.get('template');
+    if (!encoded) return;
+
+    try {
+      const text = decodeBase64Utf8(encoded);
+      // Scrub hash before setting value so a refresh starts clean
+      history.replaceState(null, '', location.pathname + location.search);
+      editor.setValue(text);
+      runLint();
+      showImportToast('Imported template from CleverTap (via CleanSlate extension).', 'ok');
+    } catch (e) {
+      console.warn('CleanSlate: failed to decode template hash:', e);
+      showImportToast('Imported template was corrupted. Please paste it manually.', 'warn');
+      history.replaceState(null, '', location.pathname + location.search);
+    }
+  }
+
+  function decodeBase64Utf8(urlEncoded) {
+    const b64 = decodeURIComponent(urlEncoded);
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }
+
+  function showImportToast(message, kind) {
+    const el = document.createElement('div');
+    el.className = 'import-toast' + (kind === 'warn' ? ' warn' : '');
+    el.innerHTML = message + ' <span class="import-toast-close">Dismiss</span>';
+    document.body.appendChild(el);
+    el.querySelector('.import-toast-close').addEventListener('click', () => el.remove());
+    if (kind !== 'warn') {
+      setTimeout(() => { el.classList.add('fade'); }, 4500);
+      setTimeout(() => { el.remove(); }, 5500);
     }
   }
 
