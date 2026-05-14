@@ -21,7 +21,63 @@ const MAX_HASH_BYTES = 1024 * 1024;
 // CodeMirror → Monaco → Ace → contenteditable → biggest textarea), or
 // an inventory of what was on the page if nothing matched.
 function extractTemplateFromPage() {
+  // Read the user's selection via each editor library's own API.
+  // window.getSelection() is unreliable for:
+  //   - <textarea>/<input>: its selection isn't visible to getSelection()
+  //   - CodeMirror/Monaco/Ace: the DOM is virtualized, so getSelection()
+  //     only sees the lines that are currently rendered (a Cmd+A on an
+  //     80 KB doc may return only ~5 KB)
+  // We try each editor first, fall back to the browser selection last.
   function fromSelection() {
+    // 1. Focused textarea / single-line input
+    const active = document.activeElement;
+    if (active && (active.tagName === 'TEXTAREA' ||
+                   (active.tagName === 'INPUT' && active.type === 'text'))) {
+      const s = active.selectionStart;
+      const e = active.selectionEnd;
+      if (typeof s === 'number' && typeof e === 'number' && s !== e) {
+        return active.value.substring(s, e);
+      }
+    }
+    // 2. CodeMirror instance with a selection (returns FULL selected text)
+    let best = null;
+    for (const node of document.querySelectorAll('.CodeMirror')) {
+      if (node.CodeMirror && typeof node.CodeMirror.somethingSelected === 'function') {
+        try {
+          if (node.CodeMirror.somethingSelected()) {
+            const t = node.CodeMirror.getSelection();
+            if (t && (!best || t.length > best.length)) best = t;
+          }
+        } catch (e) { /* ignore */ }
+      }
+    }
+    if (best) return best;
+    // 3. Monaco editor with a selection
+    if (window.monaco && window.monaco.editor && typeof window.monaco.editor.getEditors === 'function') {
+      try {
+        for (const ed of window.monaco.editor.getEditors()) {
+          const sel = ed.getSelection && ed.getSelection();
+          const model = ed.getModel && ed.getModel();
+          if (sel && model && !sel.isEmpty()) {
+            const t = model.getValueInRange(sel);
+            if (t && (!best || t.length > best.length)) best = t;
+          }
+        }
+      } catch (e) { /* ignore */ }
+    }
+    if (best) return best;
+    // 4. Ace editor with a selection
+    if (window.ace) {
+      for (const node of document.querySelectorAll('.ace_editor')) {
+        try {
+          const ed = window.ace.edit(node);
+          const t = ed.getSelectedText && ed.getSelectedText();
+          if (t && (!best || t.length > best.length)) best = t;
+        } catch (e) { /* ignore */ }
+      }
+    }
+    if (best) return best;
+    // 5. Browser selection (contenteditable, plain HTML text, etc.)
     const s = window.getSelection && window.getSelection();
     if (s && s.toString && s.toString().length > 0) return s.toString();
     return null;
