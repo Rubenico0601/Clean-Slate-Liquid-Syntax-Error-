@@ -106,8 +106,10 @@ function encodeForUrl(text) {
 }
 
 function pickBest(frameResults) {
-  const sel = frameResults.find((r) => r && r.template && r.source === 'selection');
-  if (sel) return sel;
+  // Longest candidate wins across all sources and frames. Previously
+  // "selection" always won, which silently dropped 95% of a template
+  // when the user had selected only a visible chunk in a tall editor.
+  // If the user really wants just a snippet, they can paste it manually.
   const withTemplate = frameResults.filter((r) => r && r.template);
   if (withTemplate.length === 0) return null;
   return withTemplate.reduce((a, b) => (a.template.length >= b.template.length ? a : b));
@@ -118,6 +120,7 @@ async function handleAction(tab) {
   const canScript = url && !/^(chrome|chrome-extension|about|edge|brave|view-source):/i.test(url);
 
   let extractedTemplate = null;
+  let extractedSource = 'none';
 
   if (canScript) {
     try {
@@ -127,7 +130,10 @@ async function handleAction(tab) {
       });
       const frameResults = results.map((r) => r && r.result).filter(Boolean);
       const best = pickBest(frameResults);
-      if (best) extractedTemplate = best.template;
+      if (best) {
+        extractedTemplate = best.template;
+        extractedSource = best.source;
+      }
     } catch (err) {
       console.warn('CleanSlate extraction failed:', err && err.message);
     }
@@ -136,12 +142,11 @@ async function handleAction(tab) {
   let targetUrl = CLEANSLATE_URL;
   if (extractedTemplate) {
     const encoded = encodeForUrl(extractedTemplate);
+    const sizeHint = `&size=${extractedTemplate.length}&src=${extractedSource}`;
     if (encoded.length <= MAX_HASH_BYTES) {
-      targetUrl = CLEANSLATE_URL + '#template=' + encoded;
+      targetUrl = CLEANSLATE_URL + '#template=' + encoded + sizeHint;
     } else {
-      // Template too big to fit in the URL safely. Open the site with
-      // an error hint so it can prompt the user to paste manually.
-      targetUrl = CLEANSLATE_URL + '#err=toobig';
+      targetUrl = CLEANSLATE_URL + '#err=toobig' + sizeHint;
     }
   }
 

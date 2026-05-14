@@ -191,13 +191,21 @@ Today is {{ greeting }}.
     const encoded = params.get('template');
     if (!encoded) return;
 
+    const reportedSize = parseInt(params.get('size') || '0', 10);
+    const reportedSource = params.get('src') || 'unknown';
+
     try {
       const text = decodeBase64Utf8(encoded);
       // Scrub hash before setting value so a refresh starts clean
       history.replaceState(null, '', location.pathname + location.search);
       editor.setValue(text);
       runLint();
-      showImportToast('Imported template from CleverTap (via CleanSlate extension).', 'ok');
+      const sizeKb = (text.length / 1024).toFixed(1);
+      const expectedKb = reportedSize ? ` (extension reported ${(reportedSize / 1024).toFixed(1)} KB)` : '';
+      showImportToast(
+        `Imported ${sizeKb} KB via <strong>${escapeHtml(reportedSource)}</strong>${expectedKb}.`,
+        'ok'
+      );
     } catch (e) {
       console.warn('CleanSlate: failed to decode template hash:', e);
       showImportToast('Imported template was corrupted. Please paste it manually.', 'warn');
