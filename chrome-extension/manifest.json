@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "CleanSlate Liquid Linter",
+  "version": "1.0.0",
+  "description": "Send the selected HTML from the CleverTap dashboard to the CleanSlate Liquid linter.",
+  "permissions": ["activeTab", "scripting"],
+  "host_permissions": [
+    "https://app.getbee.io/*",
+    "https://*.getbee.io/*"
+  ],
+  "action": {
+    "default_title": "Open selection in CleanSlate Liquid Linter",
+    "default_icon": {
+      "128": "icon-128.png"
+    }
+  },
+  "icons": {
+    "128": "icon-128.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}
