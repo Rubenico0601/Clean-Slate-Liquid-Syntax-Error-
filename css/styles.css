@@ -1894,7 +1894,7 @@ main.tab-content.active {
   right: 20px;
   z-index: 9999;
   max-width: 420px;
-  background: var(--accent);
+  background: #16a34a;
   color: #fff;
   padding: 12px 16px;
   border-radius: var(--radius-sm);
