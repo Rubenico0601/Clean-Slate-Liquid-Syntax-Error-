@@ -234,6 +234,40 @@ function pickBest(frameResults) {
   return withTemplate.reduce((a, b) => (a.template.length >= b.template.length ? a : b));
 }
 
+// Reads the system clipboard via an offscreen document (MV3 service
+// workers can't call navigator.clipboard directly).
+async function readClipboard() {
+  try {
+    // Make sure there's an offscreen document set up.
+    let contexts = [];
+    try {
+      contexts = await chrome.runtime.getContexts({ contextTypes: ['OFFSCREEN_DOCUMENT'] });
+    } catch (e) { /* older Chrome — fall through */ }
+    if (!contexts || contexts.length === 0) {
+      await chrome.offscreen.createDocument({
+        url: 'offscreen.html',
+        reasons: ['CLIPBOARD'],
+        justification: 'Read user-copied CleverTap template from clipboard'
+      });
+    }
+    const response = await chrome.runtime.sendMessage({
+      target: 'offscreen',
+      action: 'read-clipboard'
+    });
+    return response && response.ok ? response.text : '';
+  } catch (e) {
+    console.warn('CleanSlate clipboard read failed:', e && e.message);
+    return '';
+  }
+}
+
+// Heuristic: does the text look like an HTML / Liquid template
+// substantial enough to use as the import, vs. a stray clipboard string?
+function looksLikeTemplate(text) {
+  if (!text || text.length < 200) return false;
+  return /<html|<body|<table|<div|<head|\{%|\{\{/i.test(text);
+}
+
 async function handleAction(tab) {
   const url = tab && tab.url ? tab.url : '';
   const canScript = url && !/^(chrome|chrome-extension|about|edge|brave|view-source):/i.test(url);
@@ -241,7 +275,17 @@ async function handleAction(tab) {
   let extractedTemplate = null;
   let extractedSource = 'none';
 
-  if (canScript) {
+  // Prefer the clipboard if the user just copied a template (Cmd+A then
+  // Cmd+C in the editor). This is the only reliable path for editors
+  // that virtualize their DOM (CodeMirror 6, Monaco, etc.) — the copy
+  // event fills the clipboard with the editor's FULL document.
+  const clip = await readClipboard();
+  if (looksLikeTemplate(clip)) {
+    extractedTemplate = clip;
+    extractedSource = 'clipboard';
+  }
+
+  if (!extractedTemplate && canScript) {
     try {
       const results = await chrome.scripting.executeScript({
         target: { tabId: tab.id, allFrames: true },
