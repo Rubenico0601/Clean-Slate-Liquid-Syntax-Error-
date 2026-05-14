@@ -142,11 +142,12 @@ Today is {{ greeting }}.
     // Converter button
     document.getElementById('btn-convert').addEventListener('click', runConversion);
 
-    // Format button
+    // Format button — also unwraps BEE/wrapper artifacts if present.
     document.getElementById('btn-format').addEventListener('click', () => {
       const current = editor.getValue();
       if (!current.trim()) return;
-      const formatted = formatHtml(current);
+      const unwrapped = unwrapNestedHtml(current);
+      const formatted = formatHtml(unwrapped);
       if (formatted !== current) {
         editor.setValue(formatted);
         runLint();
@@ -209,16 +210,19 @@ Today is {{ greeting }}.
       const text = decodeBase64Utf8(encoded);
       // Scrub hash before setting value so a refresh starts clean
       history.replaceState(null, '', location.pathname + location.search);
-      // Imported content from the extension often comes from a
-      // contenteditable preview, which collapses whitespace. Auto-format
-      // it so the editor view is readable from the start.
-      const formatted = formatHtml(text);
+      // Strip BEE Plugin (or any other) outer wrapper if present, then
+      // auto-format. Imported content from the extension often comes
+      // from a contenteditable preview that collapses whitespace.
+      const unwrapped = unwrapNestedHtml(text);
+      const wasUnwrapped = unwrapped.length !== text.length;
+      const formatted = formatHtml(unwrapped);
       editor.setValue(formatted);
       runLint();
       const sizeKb = (formatted.length / 1024).toFixed(1);
       const expectedKb = reportedSize ? ` (extension reported ${(reportedSize / 1024).toFixed(1)} KB)` : '';
+      const unwrapNote = wasUnwrapped ? ' (BEE wrapper trimmed)' : '';
       showImportToast(
-        `Imported ${sizeKb} KB via <strong>${escapeHtml(reportedSource)}</strong>${expectedKb}. Auto-formatted.`,
+        `Imported ${sizeKb} KB via <strong>${escapeHtml(reportedSource)}</strong>${expectedKb}. Auto-formatted${unwrapNote}.`,
         'ok'
       );
     } catch (e) {
@@ -1536,9 +1540,61 @@ Welcome {{ Profile.first_name }} — your playlist starts with {{ playData.playC
 
   // ─── HTML + Liquid formatter ──────────────────────────────
   //
-  // Pretty-prints HTML and puts each block-level Liquid tag on its own
-  // line. Inline {{ output }} stays inline; the contents of <style>,
-  // <script>, <pre>, <textarea>, and HTML comments are preserved verbatim.
+  // Pretty-prints HTML, puts each block-level Liquid tag on its own
+  // line, and re-expands collapsed CSS inside <style> blocks. Inline
+  // {{ output }} stays inline; <script>, <pre>, <textarea>, and HTML
+  // comments are preserved verbatim.
+
+  // Detects BEE Plugin (or any other) outer wrapper around the user's
+  // template — finds the innermost <html>...</html> and returns just
+  // that. Returns the source unchanged if there's only one <html>.
+  function unwrapNestedHtml(source) {
+    if (!source || typeof source !== 'string') return source;
+    const opens = [...source.matchAll(/<html\b[^>]*>/gi)];
+    if (opens.length <= 1) return source;
+    const lastOpen = opens[opens.length - 1];
+    const after = source.substring(lastOpen.index + lastOpen[0].length);
+    const closeMatch = after.match(/<\/html\s*>/i);
+    if (!closeMatch) return source;
+    const closeStart = lastOpen.index + lastOpen[0].length + closeMatch.index;
+    const closeEnd = closeStart + closeMatch[0].length;
+    return source.substring(lastOpen.index, closeEnd);
+  }
+
+  // Re-format collapsed CSS into multi-line, indented form.
+  function expandCssBlock(cssContent) {
+    if (!cssContent || !cssContent.trim()) return cssContent;
+    let s = cssContent
+      .replace(/\{/g, '{\n')
+      .replace(/\}/g, '\n}\n')
+      .replace(/;/g, ';\n')
+      .replace(/[ \t]*\n[ \t]*/g, '\n')
+      .replace(/\n\s*\n/g, '\n')
+      .trim();
+    let depth = 0;
+    return s.split('\n').map((line) => {
+      const t = line.trim();
+      if (!t) return null;
+      if (t.startsWith('}')) depth = Math.max(0, depth - 1);
+      const out = '  '.repeat(depth) + t;
+      if (t.endsWith('{')) depth++;
+      return out;
+    }).filter(Boolean).join('\n');
+  }
+
+  // Find each <style>...</style> in the formatted output and rewrite
+  // it as a multi-line block with the parent's indent preserved.
+  function expandStyleBlocksInPlace(formatted) {
+    return formatted.replace(/^([ \t]*)(<style\b[^>]*>)([\s\S]*?)(<\/style\s*>)/gim,
+      (m, indent, open, content, close) => {
+        if (!content.trim()) return m;
+        const expanded = expandCssBlock(content);
+        const base = indent + '  ';
+        const lines = expanded.split('\n').map((l) => l ? base + l : l).join('\n');
+        return indent + open + '\n' + lines + '\n' + indent + close;
+      });
+  }
+
   function formatHtml(source) {
     if (!source || typeof source !== 'string') return source;
 
@@ -1579,6 +1635,8 @@ Welcome {{ Profile.first_name }} — your playlist starts with {{ playData.playC
     // Break around preserved blocks too so they don't fuse with tags.
     s = s.replace(new RegExp('>' + PRES, 'g'), '>\n' + PRES);
     s = s.replace(new RegExp(PRES + '<', 'g'), PRES + '\n<');
+    // Adjacent preserved tokens (back-to-back <style>) — split them.
+    s = s.replace(new RegExp(PRES + PRES, 'g'), PRES + '\n' + PRES);
     s = s.replace(/\n+/g, '\n').trim();
 
     // 5. Re-indent based on HTML tag depth.
@@ -1615,6 +1673,10 @@ Welcome {{ Profile.first_name }} — your playlist starts with {{ playData.playC
     // 6. Restore preserved + Liquid tokens.
     result = result.replace(new RegExp(PRES + '(\\d+)' + PRES, 'g'), (_m, i) => preserved[+i]);
     result = result.replace(new RegExp(LIQ + '(\\d+)' + LIQ, 'g'), (_m, i) => liquid[+i]);
+
+    // 7. Re-expand collapsed CSS inside <style> blocks so multi-rule
+    // CSS isn't on one long line.
+    result = expandStyleBlocksInPlace(result);
 
     return result;
   }
