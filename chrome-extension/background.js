@@ -106,10 +106,12 @@ function encodeForUrl(text) {
 }
 
 function pickBest(frameResults) {
-  // Longest candidate wins across all sources and frames. Previously
-  // "selection" always won, which silently dropped 95% of a template
-  // when the user had selected only a visible chunk in a tall editor.
-  // If the user really wants just a snippet, they can paste it manually.
+  // User selection wins when present — it's explicit intent. The user
+  // selected text with Cmd+A (or click+drag), so they want THAT. Only
+  // when nothing is selected do we fall back to "longest wins" across
+  // editors and contenteditables.
+  const sel = frameResults.find((r) => r && r.template && r.source === 'selection');
+  if (sel) return sel;
   const withTemplate = frameResults.filter((r) => r && r.template);
   if (withTemplate.length === 0) return null;
   return withTemplate.reduce((a, b) => (a.template.length >= b.template.length ? a : b));
