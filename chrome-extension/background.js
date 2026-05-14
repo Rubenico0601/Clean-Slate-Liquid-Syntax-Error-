@@ -236,29 +236,53 @@ function pickBest(frameResults) {
 
 // Reads the system clipboard via an offscreen document (MV3 service
 // workers can't call navigator.clipboard directly).
+async function ensureOffscreenDocument() {
+  try {
+    if (chrome.runtime.getContexts) {
+      const contexts = await chrome.runtime.getContexts({ contextTypes: ['OFFSCREEN_DOCUMENT'] });
+      if (contexts && contexts.length > 0) return;
+    }
+  } catch (e) { /* older Chrome — fall through to try create */ }
+  try {
+    await chrome.offscreen.createDocument({
+      url: 'offscreen.html',
+      reasons: ['CLIPBOARD'],
+      justification: 'Read user-copied CleverTap template from clipboard'
+    });
+  } catch (e) {
+    // "Only a single offscreen document may be created" is fine — means it already exists.
+    if (e && e.message && !/single offscreen|already/i.test(e.message)) {
+      console.warn('CleanSlate: createDocument failed:', e.message);
+      throw e;
+    }
+  }
+}
+
 async function readClipboard() {
   try {
-    // Make sure there's an offscreen document set up.
-    let contexts = [];
-    try {
-      contexts = await chrome.runtime.getContexts({ contextTypes: ['OFFSCREEN_DOCUMENT'] });
-    } catch (e) { /* older Chrome — fall through */ }
-    if (!contexts || contexts.length === 0) {
-      await chrome.offscreen.createDocument({
-        url: 'offscreen.html',
-        reasons: ['CLIPBOARD'],
-        justification: 'Read user-copied CleverTap template from clipboard'
-      });
-    }
-    const response = await chrome.runtime.sendMessage({
-      target: 'offscreen',
-      action: 'read-clipboard'
-    });
-    return response && response.ok ? response.text : '';
+    await ensureOffscreenDocument();
   } catch (e) {
-    console.warn('CleanSlate clipboard read failed:', e && e.message);
     return '';
   }
+  // Retry — offscreen JS may not have registered its onMessage listener
+  // by the time the doc is created.
+  for (let attempt = 0; attempt < 12; attempt++) {
+    try {
+      const response = await chrome.runtime.sendMessage({
+        target: 'offscreen',
+        action: 'read-clipboard'
+      });
+      if (response && typeof response.text === 'string') {
+        console.log('CleanSlate clipboard read OK, length=' + response.text.length);
+        return response.text;
+      }
+    } catch (e) {
+      // "Receiving end does not exist" — offscreen not ready yet
+    }
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  console.warn('CleanSlate clipboard read timed out after 12 attempts');
+  return '';
 }
 
 // Heuristic: does the text look like an HTML / Liquid template
@@ -311,6 +335,10 @@ async function handleAction(tab) {
     } else {
       targetUrl = CLEANSLATE_URL + '#err=toobig' + sizeHint;
     }
+  } else {
+    // Nothing useful in the clipboard OR the page. Open with a paste
+    // prompt so the user can Cmd+V the content they copied.
+    targetUrl = CLEANSLATE_URL + '#paste=1';
   }
 
   await chrome.tabs.create({ url: targetUrl });

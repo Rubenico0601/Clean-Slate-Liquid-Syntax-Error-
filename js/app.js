@@ -202,6 +202,13 @@ Today is {{ greeting }}.
       return;
     }
 
+    // Extension opened us without a template — show a one-click paste prompt.
+    if (params.get('paste') === '1') {
+      history.replaceState(null, '', location.pathname + location.search);
+      showPasteFromClipboardPrompt();
+      return;
+    }
+
     const encoded = params.get('template');
     if (!encoded) return;
 
@@ -232,6 +239,49 @@ Today is {{ greeting }}.
       showImportToast('Imported template was corrupted. Please paste it manually.', 'warn');
       history.replaceState(null, '', location.pathname + location.search);
     }
+  }
+
+  function showPasteFromClipboardPrompt() {
+    // Big centred overlay with a button. User click counts as a user
+    // gesture so navigator.clipboard.readText() is allowed.
+    const overlay = document.createElement('div');
+    overlay.className = 'paste-prompt-overlay';
+    overlay.innerHTML = `
+      <div class="paste-prompt">
+        <div class="paste-prompt-title">Paste your template</div>
+        <div class="paste-prompt-body">
+          The extension couldn't read the clipboard automatically.<br/>
+          You already copied the template — click below to paste it.
+        </div>
+        <button class="btn btn-accent paste-prompt-btn" id="paste-prompt-go">
+          Paste from clipboard
+        </button>
+        <button class="btn paste-prompt-skip" id="paste-prompt-skip">Skip</button>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    overlay.querySelector('#paste-prompt-go').addEventListener('click', async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        overlay.remove();
+        if (text && text.trim()) {
+          const unwrapped = unwrapNestedHtml(text);
+          editor.setValue(formatHtml(unwrapped));
+          runLint();
+          showImportToast(
+            `Imported ${(text.length / 1024).toFixed(1)} KB from clipboard. Auto-formatted.`,
+            'ok'
+          );
+        } else {
+          showImportToast('Clipboard was empty. Copy your template first, then try again.', 'warn');
+        }
+      } catch (e) {
+        overlay.remove();
+        showImportToast('Clipboard access denied. Paste manually with Cmd+V into the editor.', 'warn');
+      }
+    });
+    overlay.querySelector('#paste-prompt-skip').addEventListener('click', () => overlay.remove());
   }
 
   function decodeBase64Utf8(urlEncoded) {
