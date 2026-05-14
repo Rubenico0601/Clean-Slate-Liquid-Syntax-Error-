@@ -8,9 +8,13 @@
 // Where the live UI lives. Update if you fork / move the site.
 const CLEANSLATE_URL = 'https://rubenico0601.github.io/Clean-Slate-Liquid-Syntax-Error-/';
 
-// Practical URL-hash safe budget for templates. Chrome's hard limit is
-// ~2 MB but corporate proxies / extensions can mis-handle long URLs.
-const MAX_HASH_BYTES = 32 * 1024;
+// Practical URL-hash safe budget for templates. The hash fragment
+// (#...) is never sent to a server — it stays client-side in Chrome —
+// so there's no corporate-proxy concern. Chrome handles multi-MB URLs
+// in tabs.create without issue, so we set a generous 1 MB ceiling.
+// Encoded template would have to exceed 1 MB before the user sees
+// the "too large" fallback; that's well past any real email template.
+const MAX_HASH_BYTES = 1024 * 1024;
 
 // Function injected into every same-origin frame of the active tab.
 // Returns the best-guess template text (selection → focused editor →

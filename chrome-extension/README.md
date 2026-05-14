@@ -66,12 +66,12 @@ The template travels in the URL hash (`#template=<base64>`). Hashes don't get se
 
 ## Big-template fallback
 
-URLs have practical size limits (~32 KB is the safe zone before some proxies/networks misbehave; Chrome's hard limit is ~2 MB). The extension checks the encoded size before opening:
+The URL hash (`#template=...`) is never sent to GitHub Pages' servers — it stays purely client-side in the user's Chrome — so there's no corporate-proxy concern. Chrome's `tabs.create` handles multi-MB URLs without trouble. The safe ceiling is set to **1 MB encoded**:
 
-- **Under 32 KB:** open with `#template=...`. Auto-imported.
-- **Over 32 KB:** open with `#err=toobig`. Website shows a "paste manually" toast.
+- **Under 1 MB encoded:** open with `#template=...`. Auto-imported.
+- **Over 1 MB encoded:** open with `#err=toobig`. Website shows a "paste manually" toast.
 
-About 95% of real CleverTap templates fit under 32 KB. If the 5% becomes a pain point, we can add a clipboard-fallback path.
+In practice, real CleverTap email templates are 5–100 KB raw. The 1 MB ceiling has ~10× headroom even for the heaviest marketing emails.
 
 ## Updating the URL (forks, custom domains)
 
