@@ -139,18 +139,8 @@ async function handleAction(tab) {
     }
   }
 
-  // If extraction returns nothing OR very little (likely a virtualized
-  // editor like CodeMirror 6 in BEE Plugin's drag-and-drop view), open
-  // with the paste prompt instead. The user has presumably Cmd+C'd the
-  // editor content — the website's paste prompt reads the clipboard,
-  // bypassing DOM virtualization entirely.
-  const SUSPICIOUSLY_SMALL = 5000; // bytes
-  const tooSmall = !extractedTemplate || extractedTemplate.length < SUSPICIOUSLY_SMALL;
-
   let targetUrl = CLEANSLATE_URL;
-  if (tooSmall) {
-    targetUrl = CLEANSLATE_URL + '#paste=1';
-  } else if (extractedTemplate) {
+  if (extractedTemplate) {
     const encoded = encodeForUrl(extractedTemplate);
     const sizeHint = `&size=${extractedTemplate.length}&src=${extractedSource}`;
     if (encoded.length <= MAX_HASH_BYTES) {
