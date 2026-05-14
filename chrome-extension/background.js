@@ -162,12 +162,13 @@ function encodeForUrl(text) {
 }
 
 function pickBest(frameResults) {
-  // User selection wins when present — it's explicit intent. The user
-  // selected text with Cmd+A (or click+drag), so they want THAT. Only
-  // when nothing is selected do we fall back to "longest wins" across
-  // editors and contenteditables.
-  const sel = frameResults.find((r) => r && r.template && r.source === 'selection');
-  if (sel) return sel;
+  // Selection-first, but ACROSS ALL FRAMES pick the LARGEST selection.
+  // A stale 800-byte selection in the top frame must not beat an 80 KB
+  // Cmd+A inside an iframe-embedded editor.
+  const sels = frameResults.filter((r) => r && r.template && r.source === 'selection');
+  if (sels.length > 0) {
+    return sels.reduce((a, b) => (a.template.length >= b.template.length ? a : b));
+  }
   const withTemplate = frameResults.filter((r) => r && r.template);
   if (withTemplate.length === 0) return null;
   return withTemplate.reduce((a, b) => (a.template.length >= b.template.length ? a : b));
