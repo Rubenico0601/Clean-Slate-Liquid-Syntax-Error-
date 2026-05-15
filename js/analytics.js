@@ -101,7 +101,22 @@
   // Dedicated load events per surface so each extension shows up as its
   // own event in CT dashboards — saves you having to filter Tool Visited
   // by surface every time. Direct visits don't get a second event.
-  if (surface === 'side_panel') {
+  //
+  // Side Panel Opened only fires on the *first* iframe load (no template
+  // hash yet). The Import button reloads the iframe with #template=...,
+  // which would otherwise re-fire this event spuriously — that reload
+  // is covered by the Template Imported event instead.
+  function hasTemplateHash() {
+    try {
+      const hash = window.location.hash || '';
+      if (!hash || hash.length <= 1) return false;
+      return new URLSearchParams(hash.substring(1)).has('template');
+    } catch (e) {
+      return false;
+    }
+  }
+
+  if (surface === 'side_panel' && !hasTemplateHash()) {
     track('Side Panel Opened');
   } else if (surface === 'new_tab_extension') {
     track('New Tab Extension Opened');
