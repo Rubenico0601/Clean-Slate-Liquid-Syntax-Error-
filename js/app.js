@@ -5,6 +5,20 @@
 (function () {
   'use strict';
 
+  // ─── Panel mode (Chrome side-panel embed) ─────────────────
+  // Detect ?panel=1 immediately so CSS hides redundant UI from the first
+  // paint — scripts are at the end of <body>, so document.body exists.
+  const panelModeActive = (() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('panel') === '1') {
+        document.body.classList.add('panel-mode');
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  })();
+
   // ─── State ─────────────────────────────────────────────────
   let editor;
   let linter;
@@ -79,6 +93,7 @@ Today is {{ greeting }}.
 
   // ─── Init ──────────────────────────────────────────────────
   function init() {
+    initPanelModeUI();
     linter = new LiquidLinter({ clevertapMode: true });
 
     // Grab DOM refs
@@ -1142,6 +1157,7 @@ Welcome {{ Profile.first_name }} — your playlist starts with {{ playData.playC
 
     errorCount.textContent = errors.length;
     warningCount.textContent = warnings.length;
+    updatePanelSummary(diagnostics);
 
     if (diagnostics.length === 0) {
       statusBadge.className = 'status-badge status-ok';
@@ -1220,8 +1236,201 @@ Welcome {{ Profile.first_name }} — your playlist starts with {{ playData.playC
       }
 
       errorsBody.appendChild(row);
+      enhanceRowForPanelMode(row, d);
     });
   }
+
+  // ─── Panel mode helpers ───────────────────────────────────
+  // Injects a summary strip and converts each error row into an expandable
+  // detail card with line context and an inline editable line. On Apply,
+  // patches CodeMirror in place, re-lints, and postMessages the full new
+  // template to the parent extension so it can write back to BEE.
+
+  function initPanelModeUI() {
+    if (!panelModeActive) return;
+    const linterTab = document.getElementById('tab-linter');
+    if (!linterTab) return;
+    const summary = document.createElement('div');
+    summary.className = 'panel-summary';
+    summary.innerHTML = `
+      <span class="pill ok" id="panel-status">Waiting for template…</span>
+      <span class="spacer"></span>
+      <a class="reimport-btn" id="panel-open-full" target="_blank" rel="noopener">Open full ↗</a>
+    `;
+    linterTab.insertBefore(summary, linterTab.firstChild);
+    const openFull = document.getElementById('panel-open-full');
+    if (openFull) {
+      const u = new URL(window.location.href);
+      u.searchParams.delete('panel');
+      u.searchParams.delete('t');
+      openFull.href = u.toString();
+    }
+  }
+
+  function updatePanelSummary(diagnostics) {
+    if (!panelModeActive) return;
+    const badge = document.getElementById('panel-status');
+    if (!badge) return;
+    const errors = diagnostics.filter(d => d.severity === 'error').length;
+    const warnings = diagnostics.filter(d => d.severity === 'warning').length;
+    if (errors > 0) {
+      badge.className = 'pill err';
+      badge.textContent = errors + (errors === 1 ? ' error' : ' errors');
+    } else if (warnings > 0) {
+      badge.className = 'pill warn';
+      badge.textContent = warnings + (warnings === 1 ? ' warning' : ' warnings');
+    } else {
+      badge.className = 'pill ok';
+      badge.textContent = 'No issues';
+    }
+  }
+
+  function enhanceRowForPanelMode(row, diag) {
+    if (!panelModeActive) return;
+    const main = row.querySelector('.error-main');
+    if (!main) return;
+    // Replace the jumpToLine click with expand-in-place.
+    const fresh = main.cloneNode(true);
+    main.parentNode.replaceChild(fresh, main);
+
+    const expandBtn = document.createElement('button');
+    expandBtn.className = 'panel-expand-btn';
+    expandBtn.type = 'button';
+    expandBtn.textContent = 'Edit';
+    expandBtn.setAttribute('aria-expanded', 'false');
+    fresh.appendChild(expandBtn);
+
+    let detail = null;
+    const toggle = () => {
+      if (detail) {
+        detail.remove();
+        detail = null;
+        expandBtn.textContent = 'Edit';
+        expandBtn.setAttribute('aria-expanded', 'false');
+        return;
+      }
+      detail = buildPanelDetail(diag);
+      row.appendChild(detail);
+      expandBtn.textContent = 'Close';
+      expandBtn.setAttribute('aria-expanded', 'true');
+      const ta = detail.querySelector('textarea');
+      if (ta) ta.focus();
+    };
+    fresh.addEventListener('click', toggle);
+    expandBtn.addEventListener('click', (e) => { e.stopPropagation(); toggle(); });
+  }
+
+  function buildPanelDetail(diag) {
+    const wrap = document.createElement('div');
+    wrap.className = 'panel-detail';
+    const lineIdx = Math.max(0, (diag.line || 1) - 1);
+    const totalLines = editor.lineCount();
+    const startLine = Math.max(0, lineIdx - 1);
+    const endLine = Math.min(totalLines - 1, lineIdx + 1);
+
+    for (let i = startLine; i <= endLine; i++) {
+      const lineDiv = document.createElement('div');
+      lineDiv.className = 'ctx-line' + (i === lineIdx ? ' bad' : '');
+      const num = document.createElement('span');
+      num.className = 'ln';
+      num.textContent = String(i + 1);
+      const src = document.createElement('span');
+      src.className = 'src';
+      src.textContent = editor.getLine(i) || '';
+      lineDiv.appendChild(num);
+      lineDiv.appendChild(src);
+      wrap.appendChild(lineDiv);
+    }
+
+    const label = document.createElement('div');
+    label.className = 'panel-edit-label';
+    label.textContent = 'Edit line ' + (lineIdx + 1) + ':';
+    wrap.appendChild(label);
+
+    const originalLine = editor.getLine(lineIdx) || '';
+    const textarea = document.createElement('textarea');
+    textarea.className = 'panel-edit-input';
+    textarea.value = originalLine;
+    textarea.spellcheck = false;
+    wrap.appendChild(textarea);
+
+    const actions = document.createElement('div');
+    actions.className = 'panel-detail-actions';
+    const applyBtn = document.createElement('button');
+    applyBtn.className = 'panel-apply-btn';
+    applyBtn.type = 'button';
+    applyBtn.textContent = 'Apply to dashboard';
+    applyBtn.disabled = true; // enabled only after the user edits the line
+    applyBtn.title = 'Edit the line below to enable';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'panel-cancel-btn';
+    cancelBtn.type = 'button';
+    cancelBtn.textContent = 'Cancel';
+    actions.appendChild(applyBtn);
+    actions.appendChild(cancelBtn);
+    wrap.appendChild(actions);
+
+    // Toggle Apply on every keystroke based on whether the textarea diverges
+    // from the original line.
+    textarea.addEventListener('input', () => {
+      const dirty = textarea.value !== originalLine;
+      applyBtn.disabled = !dirty;
+      applyBtn.title = dirty ? 'Write this change back to the dashboard editor' : 'Edit the line below to enable';
+    });
+
+    applyBtn.addEventListener('click', () => {
+      applyBtn.disabled = true;
+      applyBtn.textContent = 'Applying…';
+      const newLineContent = textarea.value;
+      const oldLineLen = (editor.getLine(lineIdx) || '').length;
+      editor.replaceRange(
+        newLineContent,
+        { line: lineIdx, ch: 0 },
+        { line: lineIdx, ch: oldLineLen }
+      );
+      // Re-lint synchronously, then ship the new template upstream.
+      runLint();
+      requestWriteToDashboard(editor.getValue());
+      // Note: runLint() will re-render results, which removes this row
+      // and detail block. No need to reset button state.
+    });
+    cancelBtn.addEventListener('click', () => { wrap.remove(); });
+    return wrap;
+  }
+
+  function requestWriteToDashboard(template) {
+    try {
+      window.parent.postMessage(
+        { type: 'CLEANSLATE_APPLY_FIX', template: template },
+        '*'
+      );
+      showPanelToast('Applying fix to dashboard…', 'ok');
+    } catch (e) {
+      showPanelToast('Could not send fix: ' + e.message, 'err');
+    }
+  }
+
+  function showPanelToast(msg, kind) {
+    const existing = document.querySelector('.panel-toast');
+    if (existing) existing.remove();
+    const t = document.createElement('div');
+    t.className = 'panel-toast ' + (kind || '');
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 2500);
+  }
+
+  // Listen for write-back acknowledgements from the extension.
+  window.addEventListener('message', (event) => {
+    const msg = event.data || {};
+    if (msg.type === 'CLEANSLATE_APPLY_FIX_RESULT') {
+      if (msg.ok) {
+        showPanelToast('Dashboard updated.', 'ok');
+      } else {
+        showPanelToast('Write to dashboard failed: ' + (msg.error || 'unknown'), 'err');
+      }
+    }
+  });
 
   // ─── Fix Application ──────────────────────────────────────
   function applyFix(diagnostic) {

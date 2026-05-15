@@ -1,0 +1,267 @@
+/*
+ * Panel mode — activated by ?panel=1 in the URL, used by the Chrome side
+ * panel extension. Hides the full-app chrome (tabs, top toolbar, brand
+ * header, editor pane, properties pane) and turns the Diagnostics section
+ * into a full-height, focused issues list with click-to-expand inline fix.
+ *
+ * Has no effect when the body does NOT have .panel-mode — the normal
+ * site experience is unchanged.
+ */
+
+body.panel-mode {
+  margin: 0;
+}
+body.panel-mode .app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  gap: 0;
+}
+
+/* Hide chrome that's redundant in the side panel. */
+body.panel-mode .header,
+body.panel-mode .tab-bar,
+body.panel-mode .editor-panel,
+body.panel-mode .properties-section,
+body.panel-mode #tab-builder,
+body.panel-mode #tab-tools,
+body.panel-mode #tab-variables,
+body.panel-mode #tab-preview,
+body.panel-mode #tab-reference {
+  display: none !important;
+}
+
+/* Compact header (stat row only) lives inside #tab-linter as a sibling
+   of the (now hidden) editor and the results panel. We promote the
+   results panel to fill the screen. */
+body.panel-mode #tab-linter {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  grid-template-columns: none !important;
+  grid-template-rows: none !important;
+}
+
+body.panel-mode .results-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+body.panel-mode .errors-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+  border-radius: 0;
+}
+
+body.panel-mode .errors-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Compact stat strip injected at the top of the panel. */
+.panel-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 12px;
+  font-weight: 500;
+  color: #4b5563;
+  flex-shrink: 0;
+}
+.panel-summary .pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.panel-summary .pill.err  { background: #fee2e2; color: #b91c1c; }
+.panel-summary .pill.warn { background: #fef3c7; color: #92400e; }
+.panel-summary .pill.ok   { background: #d1fae5; color: #047857; }
+.panel-summary .spacer    { flex: 1; }
+.panel-summary .reimport-btn {
+  all: unset;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: #4338ca;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+}
+.panel-summary .reimport-btn:hover { background: #3730a3; }
+
+/* Issue rows in panel mode */
+body.panel-mode .error-row {
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e5e7eb;
+  gap: 0;
+}
+body.panel-mode .error-row .error-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+body.panel-mode .error-row .error-index    { font-size: 11px; color: #9ca3af; min-width: 18px; }
+body.panel-mode .error-row .error-location { font-size: 11px; color: #6b7280; font-weight: 500; }
+body.panel-mode .error-row .error-message  { flex: 1; font-size: 12px; min-width: 0; }
+body.panel-mode .error-row .error-severity-icon { font-size: 12px; }
+
+body.panel-mode .error-row.severity-error   { border-left: 3px solid #dc2626; }
+body.panel-mode .error-row.severity-warning { border-left: 3px solid #f59e0b; }
+
+body.panel-mode .panel-expand-btn {
+  all: unset;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #e5e7eb;
+  color: #374151;
+  font-size: 11px;
+  font-weight: 600;
+}
+body.panel-mode .panel-expand-btn:hover { background: #d1d5db; }
+
+/* Detail block (line context + inline edit) */
+.panel-detail {
+  margin-top: 10px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 8px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+.panel-detail .ctx-line {
+  display: flex;
+  gap: 8px;
+  padding: 2px 4px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: #6b7280;
+}
+.panel-detail .ctx-line.bad {
+  background: #fef2f2;
+  color: #111827;
+  font-weight: 500;
+}
+.panel-detail .ctx-line .ln {
+  flex-shrink: 0;
+  width: 36px;
+  text-align: right;
+  color: #9ca3af;
+  user-select: none;
+}
+.panel-detail .ctx-line .src { flex: 1; min-width: 0; }
+
+.panel-edit-label {
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: #4b5563;
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+.panel-edit-input {
+  width: 100%;
+  min-height: 50px;
+  padding: 6px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  resize: vertical;
+  box-sizing: border-box;
+}
+.panel-edit-input:focus {
+  outline: none;
+  border-color: #6d28d9;
+  box-shadow: 0 0 0 2px rgba(109, 40, 217, 0.2);
+}
+
+.panel-detail-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.panel-detail-actions button {
+  all: unset;
+  cursor: pointer;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  box-sizing: border-box;
+}
+
+/* Specificity 0,2,0 — beats the parent's 0,1,1 (which was resetting
+   background via `all: unset`). */
+.panel-detail-actions .panel-apply-btn {
+  background: #6d28d9;
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(109, 40, 217, 0.25);
+}
+.panel-detail-actions .panel-apply-btn:hover  { background: #5b21b6; }
+.panel-detail-actions .panel-apply-btn:active { background: #4c1d95; }
+
+/* Disabled state — only applies when the user hasn't edited the line yet.
+   Clearly visible as a button, but unmistakably inactive. */
+.panel-detail-actions .panel-apply-btn:disabled,
+.panel-detail-actions .panel-apply-btn[aria-disabled="true"] {
+  background: #e5e7eb;
+  color: #9ca3af;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.panel-detail-actions .panel-cancel-btn {
+  background: #fff;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+.panel-detail-actions .panel-cancel-btn:hover  { background: #f3f4f6; border-color: #9ca3af; }
+.panel-detail-actions .panel-cancel-btn:active { background: #e5e7eb; }
+
+.panel-toast {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  z-index: 9999;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  animation: panel-toast-in 0.2s ease-out;
+}
+.panel-toast.ok   { background: #047857; color: #fff; }
+.panel-toast.err  { background: #b91c1c; color: #fff; }
+.panel-toast.warn { background: #b45309; color: #fff; }
+@keyframes panel-toast-in {
+  from { opacity: 0; transform: translate(-50%, 6px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
