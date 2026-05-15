@@ -95,17 +95,13 @@
     }
   }
 
-  // Auto page-view-like event on every load (every surface).
-  track('Tool Visited', { panel_mode: surface === 'side_panel' });
-
-  // Dedicated load events per surface so each extension shows up as its
-  // own event in CT dashboards — saves you having to filter Tool Visited
-  // by surface every time. Direct visits don't get a second event.
-  //
-  // Side Panel Opened only fires on the *first* iframe load (no template
-  // hash yet). The Import button reloads the iframe with #template=...,
-  // which would otherwise re-fire this event spuriously — that reload
-  // is covered by the Template Imported event instead.
+  // Side-panel "Import current template" reloads the iframe with a
+  // template hash. That reload re-runs this whole script, which would
+  // otherwise re-fire Tool Visited and Side Panel Opened every time.
+  // Suppress both on the side-panel reload path — Template Imported is
+  // already the event that represents what the user did. Direct visits
+  // and new-tab extension opens are always genuine new sessions, so they
+  // fire normally.
   function hasTemplateHash() {
     try {
       const hash = window.location.hash || '';
@@ -116,10 +112,15 @@
     }
   }
 
-  if (surface === 'side_panel' && !hasTemplateHash()) {
-    track('Side Panel Opened');
-  } else if (surface === 'new_tab_extension') {
-    track('New Tab Extension Opened');
+  const isSidePanelReload = surface === 'side_panel' && hasTemplateHash();
+
+  if (!isSidePanelReload) {
+    track('Tool Visited', { panel_mode: surface === 'side_panel' });
+    if (surface === 'side_panel') {
+      track('Side Panel Opened');
+    } else if (surface === 'new_tab_extension') {
+      track('New Tab Extension Opened');
+    }
   }
 
   window.CleanSlateAnalytics = { track: track, ready: true, surface: surface };
