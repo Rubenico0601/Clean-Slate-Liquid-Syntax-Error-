@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>CleanSlate Liquid Linter</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="title">CleanSlate</div>
+    <div class="actions">
+      <button id="import-btn" class="btn" type="button">Import current template</button>
+      <button id="newtab-btn" class="btn ghost" type="button" title="Open in new tab">&#8599;</button>
+    </div>
+  </header>
+  <div id="status" class="status" role="status" aria-live="polite"></div>
+  <iframe id="linter-frame" src="about:blank" title="CleanSlate Liquid Linter"></iframe>
+  <script src="sidepanel.js"></script>
+</body>
+</html>

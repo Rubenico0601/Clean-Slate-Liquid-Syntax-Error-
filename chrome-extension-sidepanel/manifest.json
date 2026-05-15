@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "CleanSlate Liquid Linter (Side Panel)",
+  "version": "1.0.0",
+  "description": "Side-panel companion that imports CleverTap templates into the CleanSlate Liquid linter without leaving the dashboard.",
+  "permissions": ["sidePanel", "activeTab", "scripting", "tabs"],
+  "host_permissions": [
+    "https://*.clevertap.com/*",
+    "https://app.getbee.io/*",
+    "https://*.getbee.io/*"
+  ],
+  "action": {
+    "default_title": "Open CleanSlate Liquid Linter side panel",
+    "default_icon": { "128": "icon-128.png" }
+  },
+  "icons": { "128": "icon-128.png" },
+  "background": { "service_worker": "background.js" },
+  "side_panel": { "default_path": "sidepanel.html" }
+}
