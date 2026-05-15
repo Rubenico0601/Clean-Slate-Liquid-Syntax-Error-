@@ -163,7 +163,9 @@ function readSelectionFromFrame() {
 }
 
 function buildSiteUrl(text) {
-  if (!text || !text.trim()) return SITE_URL;
+  // Always include #src=... so the site's analytics can attribute the
+  // visit to the side-panel-fallback path even when no template was found.
+  if (!text || !text.trim()) return SITE_URL + '#src=sidepanel-fallback-empty';
   const params = new URLSearchParams();
   params.set('template', base64EncodeUtf8(text));
   params.set('size', String(text.length));

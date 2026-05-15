@@ -19,6 +19,18 @@
     return false;
   })();
 
+  // ─── Analytics shim ───────────────────────────────────────
+  // Thin wrapper over window.CleanSlateAnalytics so app.js can call
+  // track('Event Name', {...}) without null-checking everywhere.
+  // Silently no-ops if analytics isn't loaded or configured.
+  const track = (eventName, props) => {
+    try {
+      if (window.CleanSlateAnalytics && window.CleanSlateAnalytics.track) {
+        window.CleanSlateAnalytics.track(eventName, props || {});
+      }
+    } catch (e) {}
+  };
+
   // ─── State ─────────────────────────────────────────────────
   let editor;
   let linter;
@@ -140,11 +152,13 @@ Today is {{ greeting }}.
     sampleBtn.addEventListener('click', () => {
       editor.setValue(SAMPLE_TEMPLATE);
       editor.focus();
+      track('Sample Loaded', { kind: 'valid' });
     });
 
     document.getElementById('btn-broken-sample').addEventListener('click', () => {
       editor.setValue(BROKEN_SAMPLE);
       editor.focus();
+      track('Sample Loaded', { kind: 'broken' });
     });
 
     copyBtn.addEventListener('click', copyErrors);
@@ -155,7 +169,10 @@ Today is {{ greeting }}.
     });
 
     // Converter button
-    document.getElementById('btn-convert').addEventListener('click', runConversion);
+    document.getElementById('btn-convert').addEventListener('click', () => {
+      track('LP To CT Conversion Clicked');
+      runConversion();
+    });
 
     // Format button — formats only, NEVER strips content. (Unwrap is
     // dangerous when applied to content the user pasted manually; it
@@ -164,6 +181,7 @@ Today is {{ greeting }}.
     document.getElementById('btn-format').addEventListener('click', () => {
       const current = editor.getValue();
       if (!current.trim()) return;
+      track('Format Clicked', { size_kb: +(current.length / 1024).toFixed(1) });
       const formatted = formatHtml(current);
       if (formatted !== current) {
         editor.setValue(formatted);
@@ -245,6 +263,11 @@ Today is {{ greeting }}.
       const sizeKb = (formatted.length / 1024).toFixed(1);
       const expectedKb = reportedSize ? ` (extension reported ${(reportedSize / 1024).toFixed(1)} KB)` : '';
       const unwrapNote = wasUnwrapped ? ' (BEE wrapper trimmed)' : '';
+      track('Template Imported', {
+        source: reportedSource,
+        size_kb: +sizeKb,
+        was_unwrapped: wasUnwrapped,
+      });
       showImportToast(
         `Imported ${sizeKb} KB via <strong>${escapeHtml(reportedSource)}</strong>${expectedKb}. Auto-formatted${unwrapNote}.`,
         'ok'
@@ -329,6 +352,7 @@ Today is {{ greeting }}.
     tabBtns.forEach(btn => {
       btn.addEventListener('click', () => {
         const tabId = btn.dataset.tab;
+        track('Tab Switched', { tab: tabId });
 
         // Update buttons
         tabBtns.forEach(b => b.classList.remove('active'));
@@ -1230,6 +1254,10 @@ Welcome {{ Profile.first_name }} — your playlist starts with {{ playData.playC
         fixBtn.title = 'Apply a fix for this error';
         fixBtn.addEventListener('click', (e) => {
           e.stopPropagation();
+          track('Fix Applied', {
+            severity: d.severity,
+            fix_type: (d.fix && d.fix.fixType) || 'unknown',
+          });
           applyFix(d);
         });
         row.appendChild(fixBtn);
@@ -1383,6 +1411,7 @@ Welcome {{ Profile.first_name }} — your playlist starts with {{ playData.playC
       applyBtn.textContent = 'Applying…';
       const newLineContent = textarea.value;
       const oldLineLen = (editor.getLine(lineIdx) || '').length;
+      track('Side Panel Apply Clicked', { severity: diag.severity });
       editor.replaceRange(
         newLineContent,
         { line: lineIdx, ch: 0 },

@@ -76,7 +76,9 @@ function readSelectionFromFrame() {
 }
 
 function buildSiteUrl(text) {
-  if (!text || !text.trim()) return SITE_URL;
+  // Always include #src=... so the site's analytics can attribute the
+  // visit to the new-tab extension even when no template was extracted.
+  if (!text || !text.trim()) return SITE_URL + '#src=newtab-empty';
   const encoded = base64EncodeUtf8(text);
   const params = new URLSearchParams();
   params.set('template', encoded);

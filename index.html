@@ -650,6 +650,9 @@ Hello, {{ name }}!</pre>
 
   <!-- App -->
   <script src="https://cdn.jsdelivr.net/npm/liquidjs@10.16.1/dist/liquid.browser.min.js"></script>
+  <!-- Analytics loads early so the Tool Visited event fires on page load,
+       even if the user closes the tab before interacting. -->
+  <script src="js/analytics.js"></script>
   <script src="js/liquid-linter.js"></script>
   <script src="js/leanplum-converter.js"></script>
   <script src="js/liquid-builder.js"></script>
