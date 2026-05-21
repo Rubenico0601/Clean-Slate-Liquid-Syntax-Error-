@@ -78,6 +78,9 @@
       <button class="tab-btn" data-tab="preview">
         <span class="tab-icon">&#9728;</span> Preview
       </button>
+      <button class="tab-btn" data-tab="amp">
+        <span class="tab-icon">&#9889;</span> AMP
+      </button>
     </nav>
 
     <!-- ═══ Tab: Linter ═══════════════════════════════════ -->
@@ -538,6 +541,38 @@ Hello, {{ name }}!</pre>
       </div>
     </div>
 
+    <!-- ═══ Tab: AMP4Email Validator ════════════════════════ -->
+    <main class="tab-content" id="tab-amp">
+
+      <!-- Editor -->
+      <section class="editor-panel">
+        <div class="panel-header">
+          <span class="panel-title">AMP4Email Template</span>
+          <span>Paste your AMP4Email HTML. Validates against the official AMP spec.</span>
+        </div>
+        <div class="editor-wrap">
+          <textarea id="amp-editor-textarea"></textarea>
+        </div>
+      </section>
+
+      <!-- Results -->
+      <aside class="results-panel">
+        <section class="errors-section">
+          <div class="panel-header">
+            <span class="panel-title">AMP Diagnostics</span>
+            <span class="status-badge status-ok" id="amp-status-badge">Awaiting template</span>
+          </div>
+          <div class="errors-scroll" id="amp-errors-body">
+            <div class="no-errors">
+              <div class="no-errors-icon">&#9889;</div>
+              <div class="no-errors-text">Paste an AMP4Email template above. The official AMP validator runs in your browser — no server, no upload.</div>
+            </div>
+          </div>
+        </section>
+      </aside>
+
+    </main>
+
   </div>
 
   <!-- CodeMirror JS -->
@@ -653,6 +688,7 @@ Hello, {{ name }}!</pre>
   <!-- Analytics loads early so the Tool Visited event fires on page load,
        even if the user closes the tab before interacting. -->
   <script src="js/analytics.js"></script>
+  <script src="js/amp-validator.js"></script>
   <script src="js/liquid-linter.js"></script>
   <script src="js/leanplum-converter.js"></script>
   <script src="js/liquid-builder.js"></script>

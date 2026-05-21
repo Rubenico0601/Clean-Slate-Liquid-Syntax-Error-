@@ -38,6 +38,15 @@
   let lastDiagnostics = [];
   const DEBOUNCE_MS = 300;
 
+  // AMP tab state. Editor is lazy-initialised the first time the tab is
+  // activated (or when an AMP4Email import auto-routes into it) — avoids
+  // CodeMirror's hidden-container rendering quirks.
+  let ampEditor;
+  let ampLintTimeout;
+  let ampErrorsBody;
+  let ampStatusBadge;
+  const AMP_DEBOUNCE_MS = 500;
+
   // ─── DOM refs (set in init) ────────────────────────────────
   let errorsBody;
   let errorCount;
@@ -252,6 +261,32 @@ Today is {{ greeting }}.
       const text = decodeBase64Utf8(encoded);
       // Scrub hash before setting value so a refresh starts clean
       history.replaceState(null, '', location.pathname + location.search);
+
+      // Auto-route AMP4Email templates into the AMP tab. The Liquid linter
+      // would flag every <amp-*> tag as unknown, which isn't useful when
+      // the template is genuinely AMP.
+      if (window.CleanSlateAmp && window.CleanSlateAmp.looksLikeAmp4Email(text)) {
+        ensureAmpTab();
+        if (ampEditor) {
+          ampEditor.setValue(text);
+          // Switch to AMP tab so the user lands directly on the result.
+          const ampTabBtn = document.querySelector('.tab-btn[data-tab="amp"]');
+          if (ampTabBtn) ampTabBtn.click();
+          const sizeKb = (text.length / 1024).toFixed(1);
+          track('Template Imported', {
+            source: reportedSource,
+            size_kb: +sizeKb,
+            was_unwrapped: false,
+            format: 'amp4email',
+          });
+          showImportToast(
+            `Imported ${sizeKb} KB via <strong>${escapeHtml(reportedSource)}</strong>. Detected AMP4Email — routed to the AMP tab.`,
+            'ok'
+          );
+          return;
+        }
+      }
+
       // Strip BEE Plugin (or any other) outer wrapper if present, then
       // auto-format. Imported content from the extension often comes
       // from a contenteditable preview that collapses whitespace.
@@ -267,6 +302,7 @@ Today is {{ greeting }}.
         source: reportedSource,
         size_kb: +sizeKb,
         was_unwrapped: wasUnwrapped,
+        format: 'liquid',
       });
       showImportToast(
         `Imported ${sizeKb} KB via <strong>${escapeHtml(reportedSource)}</strong>${expectedKb}. Auto-formatted${unwrapNote}.`,
@@ -353,6 +389,16 @@ Today is {{ greeting }}.
       btn.addEventListener('click', () => {
         const tabId = btn.dataset.tab;
         track('Tab Switched', { tab: tabId });
+
+        // Lazy-init the AMP tab on first activation. CodeMirror renders
+        // best when its container is visible, so we wait until now.
+        if (tabId === 'amp' && !ampEditor) {
+          ensureAmpTab();
+        } else if (tabId === 'amp' && ampEditor) {
+          // Editor exists but might have been laid out while hidden —
+          // force a refresh so line numbers etc. paint correctly.
+          setTimeout(() => ampEditor.refresh(), 0);
+        }
 
         // Update buttons
         tabBtns.forEach(b => b.classList.remove('active'));
@@ -1460,6 +1506,141 @@ Welcome {{ Profile.first_name }} — your playlist starts with {{ playData.playC
       }
     }
   });
+
+  // ─── AMP4Email tab ────────────────────────────────────────
+  // Lazy CodeMirror init + debounced live validation against the official
+  // AMP validator (loaded from cdn.ampproject.org on first use).
+
+  function ensureAmpTab() {
+    if (ampEditor) return;
+    ampErrorsBody = document.getElementById('amp-errors-body');
+    ampStatusBadge = document.getElementById('amp-status-badge');
+    const ta = document.getElementById('amp-editor-textarea');
+    if (!ta) return;
+    ampEditor = CodeMirror.fromTextArea(ta, {
+      mode: 'htmlmixed',
+      theme: 'material-darker',
+      lineNumbers: true,
+      lineWrapping: true,
+      matchBrackets: true,
+      autoCloseBrackets: true,
+      tabSize: 2,
+      gutters: ['CodeMirror-linenumbers'],
+      styleActiveLine: true,
+      placeholder: 'Paste your AMP4Email template here...',
+    });
+    ampEditor.setSize('100%', '100%');
+    ampEditor.on('change', () => {
+      clearTimeout(ampLintTimeout);
+      ampLintTimeout = setTimeout(runAmpValidation, AMP_DEBOUNCE_MS);
+    });
+    // If something already populated the editor before init (auto-route),
+    // kick off validation now.
+    if (ampEditor.getValue().trim()) {
+      runAmpValidation();
+    }
+    setTimeout(() => ampEditor.refresh(), 0);
+  }
+
+  async function runAmpValidation() {
+    if (!ampEditor) return;
+    const source = ampEditor.getValue();
+    if (!source.trim()) {
+      ampStatusBadge.className = 'status-badge status-ok';
+      ampStatusBadge.textContent = 'Awaiting template';
+      ampErrorsBody.innerHTML =
+        '<div class="no-errors"><div class="no-errors-icon">&#9889;</div>' +
+        '<div class="no-errors-text">Paste an AMP4Email template above. ' +
+        'The official AMP validator runs in your browser — no server, no upload.</div></div>';
+      return;
+    }
+
+    ampStatusBadge.className = 'status-badge';
+    ampStatusBadge.textContent = 'Validating…';
+    ampErrorsBody.innerHTML =
+      '<div class="no-errors"><div class="no-errors-text">Loading AMP validator…</div></div>';
+
+    try {
+      const result = await window.CleanSlateAmp.validate(source, 'AMP4EMAIL');
+      renderAmpResults(result);
+    } catch (e) {
+      ampStatusBadge.className = 'status-badge status-error';
+      ampStatusBadge.textContent = 'Validator failed';
+      ampErrorsBody.innerHTML =
+        '<div class="no-errors"><div class="no-errors-text">Could not load AMP validator: ' +
+        escapeHtml(e.message || String(e)) +
+        '</div></div>';
+    }
+  }
+
+  function renderAmpResults(result) {
+    const allErrors = result.errors || [];
+    const errors = allErrors.filter(e => e.severity === 'ERROR');
+    const warnings = allErrors.filter(e => e.severity === 'WARNING');
+
+    if (result.status === 'PASS' && allErrors.length === 0) {
+      ampStatusBadge.className = 'status-badge status-ok';
+      ampStatusBadge.textContent = 'Valid AMP4Email';
+      ampErrorsBody.innerHTML =
+        '<div class="no-errors"><div class="no-errors-icon">&#10003;</div>' +
+        '<div class="no-errors-text">Template passes AMP4Email validation.</div></div>';
+      track('AMP Validated', { status: 'PASS', errors: 0, warnings: 0 });
+      return;
+    }
+
+    ampStatusBadge.className = errors.length > 0
+      ? 'status-badge status-error'
+      : 'status-badge status-warn';
+    ampStatusBadge.textContent = errors.length > 0
+      ? errors.length + (errors.length === 1 ? ' error' : ' errors')
+      : warnings.length + (warnings.length === 1 ? ' warning' : ' warnings');
+
+    ampErrorsBody.innerHTML = '';
+    allErrors.forEach((err, idx) => {
+      const row = document.createElement('div');
+      const sev = err.severity === 'ERROR' ? 'error' : 'warning';
+      row.className = 'error-row severity-' + sev;
+
+      const main = document.createElement('div');
+      main.className = 'error-main';
+      main.setAttribute('role', 'button');
+      main.setAttribute('tabindex', '0');
+      const dot = err.severity === 'ERROR' ? '&#9679;' : '&#9651;';
+      main.innerHTML =
+        '<span class="error-index">' + (idx + 1) + '</span>' +
+        '<span class="error-severity-icon">' + dot + '</span>' +
+        '<span class="error-location">Line ' + (err.line || 1) + ', Col ' + (err.col || 1) + '</span>' +
+        '<span class="error-message">' + escapeHtml(err.message || err.code || 'AMP validation error') + '</span>';
+
+      main.addEventListener('click', () => {
+        if (ampEditor && err.line) {
+          ampEditor.setCursor({ line: err.line - 1, ch: Math.max(0, (err.col || 1) - 1) });
+          ampEditor.focus();
+        }
+      });
+
+      row.appendChild(main);
+
+      if (err.specUrl) {
+        const learn = document.createElement('a');
+        learn.href = err.specUrl;
+        learn.target = '_blank';
+        learn.rel = 'noopener';
+        learn.className = 'btn';
+        learn.textContent = 'Spec';
+        learn.title = 'Open the AMP spec page for this rule';
+        row.appendChild(learn);
+      }
+
+      ampErrorsBody.appendChild(row);
+    });
+
+    track('AMP Validated', {
+      status: result.status,
+      errors: errors.length,
+      warnings: warnings.length,
+    });
+  }
 
   // ─── Fix Application ──────────────────────────────────────
   function applyFix(diagnostic) {
