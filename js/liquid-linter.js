@@ -694,6 +694,47 @@ class LiquidLinter {
           `use bracket notation: \`["${dotPropWithSpace[1]}"]\`.`);
       }
 
+      // ─── Balanced brackets inside the tag body ─────────────────
+      // Catches things like `Event"foo"]` (missing opening `[`) or
+      // `Event["foo"` (missing closing `]`). Counts `[` vs `]` while
+      // ignoring anything inside string literals.
+      let bd = 0;
+      let inStr = false;
+      let strCh = null;
+      let sawIssue = false;
+      for (let i = 0; i < inner.length; i++) {
+        const c = inner[i];
+        if (inStr) {
+          if (c === '\\' && i + 1 < inner.length) { i++; continue; }
+          if (c === strCh) inStr = false;
+          continue;
+        }
+        if (c === '"' || c === "'") { inStr = true; strCh = c; continue; }
+        if (c === '[') bd++;
+        else if (c === ']') {
+          bd--;
+          if (bd < 0) { sawIssue = true; break; }
+        }
+      }
+      if (sawIssue || bd !== 0) {
+        // Try to surface the specific pattern people hit most: a quoted
+        // identifier next to Profile/Event with no opening bracket.
+        const orphanClose = inner.match(/\b(Profile|Event)\s*"([^"]*)"\s*\]/);
+        if (orphanClose) {
+          this.addDiagnostic(token.line, token.col, 'error',
+            `\`${orphanClose[1]}"${orphanClose[2]}"]\` is missing its opening bracket. ` +
+            `Did you mean \`${orphanClose[1]}["${orphanClose[2]}"]\`?`);
+        } else if (bd > 0) {
+          this.addDiagnostic(token.line, token.col, 'error',
+            `Unbalanced brackets in tag: ${bd} unclosed \`[\`. ` +
+            'Every `[` needs a matching `]`.');
+        } else {
+          this.addDiagnostic(token.line, token.col, 'error',
+            `Unbalanced brackets in tag: ${Math.abs(bd) || 1} extra \`]\`. ` +
+            'Every `]` needs a matching `[` before it.');
+        }
+      }
+
       // Check nested object depth (max 3 levels)
       const nestedMatch = inner.match(/((?:Profile|Event)(?:\.\w+|\["[^"]+"\])+)/);
       if (nestedMatch) {
