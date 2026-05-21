@@ -1632,6 +1632,20 @@ Welcome {{ Profile.first_name }} — your playlist starts with {{ playData.playC
         row.appendChild(learn);
       }
 
+      // Fix suggestion (when we have a mapping for this error code).
+      // Falls back silently to just the validator's own message when no
+      // suggestion is available — the Spec link is the second line of help.
+      const suggestion = window.CleanSlateAmp && window.CleanSlateAmp.suggestFix
+        ? window.CleanSlateAmp.suggestFix(err)
+        : null;
+      if (suggestion) {
+        const hint = document.createElement('div');
+        hint.className = 'amp-fix-hint';
+        hint.innerHTML =
+          '<span class="amp-fix-label">Suggested fix:</span> ' + escapeHtml(suggestion);
+        row.appendChild(hint);
+      }
+
       ampErrorsBody.appendChild(row);
     });
 
