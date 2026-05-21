@@ -1621,6 +1621,30 @@ Welcome {{ Profile.first_name }} — your playlist starts with {{ playData.playC
 
       row.appendChild(main);
 
+      // One-click auto-fix when the error is deterministic enough that
+      // we can patch it without guessing user intent (e.g. strip a
+      // disallowed attr, change http→https, insert a missing extension
+      // script). Errors that need user judgment skip this button and
+      // rely on the Suggested-fix hint below.
+      if (window.CleanSlateAmp && window.CleanSlateAmp.canAutoFix && window.CleanSlateAmp.canAutoFix(err)) {
+        const fixBtn = document.createElement('button');
+        fixBtn.className = 'btn btn-fix';
+        fixBtn.textContent = 'Fix';
+        fixBtn.title = 'Apply this fix automatically';
+        fixBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const current = ampEditor.getValue();
+          const fixed = window.CleanSlateAmp.autoFix(err, current);
+          if (fixed && fixed !== current) {
+            ampEditor.setValue(fixed);
+            track('AMP Fix Applied', { code: err.code, severity: err.severity });
+          } else {
+            track('AMP Fix Failed', { code: err.code });
+          }
+        });
+        row.appendChild(fixBtn);
+      }
+
       if (err.specUrl) {
         const learn = document.createElement('a');
         learn.href = err.specUrl;

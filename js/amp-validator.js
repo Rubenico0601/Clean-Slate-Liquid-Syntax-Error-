@@ -193,7 +193,142 @@
     MANDATORY_CDATA_MISSING_OR_INCORRECT: (p) =>
       `The content inside <${p[0]}> is missing or doesn't match what AMP4Email expects (e.g., the boilerplate <style> block has a fixed body). ` +
       `Compare to the canonical AMP4Email starter template.`,
+
+    DISALLOWED_SCRIPT_TAG: () =>
+      `Only specific <script> tags are allowed in AMP4Email: (1) the AMP runtime ` +
+      `<script async src="https://cdn.ampproject.org/v0.js">, (2) custom-element extension scripts ` +
+      `<script async custom-element="amp-XXX" src="https://cdn.ampproject.org/v0/amp-XXX-VERSION.js">, ` +
+      `and (3) inline JSON config like <script type="application/json">. Inline JavaScript, third-party libraries, ` +
+      `and event handlers are not allowed. Remove the offending <script> tag.`,
+
+    DEV_MODE_ONLY: (p) =>
+      `\`${p[0]}\` is only allowed during development and will be stripped from production AMP. Remove it before sending.`,
+
+    INVALID_JSON_CDATA: (p) =>
+      `The JSON content inside <${p[0]}> is malformed. Validate it with a JSON formatter and fix the syntax.`,
+
+    DISALLOWED_DOMAIN: (p) =>
+      `The domain in \`${p[0]}\` isn't allowed for this attribute in AMP4Email. ` +
+      `Some attributes restrict URLs to specific trusted hosts — check the spec link.`,
   };
+
+  // ─── Auto-fixes ────────────────────────────────────────────
+  // Subset of error codes where the fix is purely mechanical and
+  // doesn't require a user judgment call. Each handler takes (error, source)
+  // and returns the new source string, or null if it can't safely fix.
+  // The line/col coming from the validator drives where in the source to
+  // operate. Anything ambiguous (which value to use, which duplicate to
+  // keep, where to put removed content) deliberately stays a suggestion-
+  // only error so the user makes the call.
+
+  function escapeRegex(s) {
+    return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  const AMP_AUTO_FIXES = {
+    DISALLOWED_ATTR: (err, source) => {
+      const attr = (err.params || [])[0];
+      if (!attr) return null;
+      const lines = source.split('\n');
+      const lineIdx = (err.line || 1) - 1;
+      if (lineIdx < 0 || lineIdx >= lines.length) return null;
+      // Match the attribute with optional value (quoted or bare). Leading
+      // whitespace is consumed so we don't leave double spaces.
+      const pattern = new RegExp(
+        '\\s+' + escapeRegex(attr) + '(?:\\s*=\\s*(?:"[^"]*"|\'[^\']*\'|[^\\s>]+))?',
+        'i'
+      );
+      const newLine = lines[lineIdx].replace(pattern, '');
+      if (newLine === lines[lineIdx]) return null;
+      lines[lineIdx] = newLine;
+      return lines.join('\n');
+    },
+
+    DUPLICATE_ATTRIBUTE: (err, source) => {
+      const attr = (err.params || [])[0];
+      if (!attr) return null;
+      const lines = source.split('\n');
+      const lineIdx = (err.line || 1) - 1;
+      if (lineIdx < 0 || lineIdx >= lines.length) return null;
+      // Remove the *second* occurrence only.
+      const pattern = new RegExp(
+        '\\s+' + escapeRegex(attr) + '\\s*=\\s*(?:"[^"]*"|\'[^\']*\')',
+        'gi'
+      );
+      let n = 0;
+      const newLine = lines[lineIdx].replace(pattern, (m) => (++n === 2 ? '' : m));
+      if (newLine === lines[lineIdx]) return null;
+      lines[lineIdx] = newLine;
+      return lines.join('\n');
+    },
+
+    INVALID_URL_PROTOCOL: (err, source) => {
+      const lines = source.split('\n');
+      const lineIdx = (err.line || 1) - 1;
+      if (lineIdx < 0 || lineIdx >= lines.length) return null;
+      const newLine = lines[lineIdx].replace(/\bhttp:\/\//g, 'https://');
+      if (newLine === lines[lineIdx]) return null;
+      lines[lineIdx] = newLine;
+      return lines.join('\n');
+    },
+
+    MISSING_REQUIRED_EXTENSION: (err, source) => {
+      const extName = (err.params || [])[0];
+      if (!extName) return null;
+      // Don't double-insert if the script already exists.
+      if (new RegExp('custom-element\\s*=\\s*["\']' + escapeRegex(extName) + '["\']').test(source)) {
+        return null;
+      }
+      const tag =
+        '  <script async custom-element="' + extName +
+        '" src="https://cdn.ampproject.org/v0/' + extName + '-0.1.js"></script>\n';
+      // Prefer inserting just before </head>.
+      const headClose = source.match(/<\/head>/i);
+      if (headClose && headClose.index !== undefined) {
+        return source.slice(0, headClose.index) + tag + source.slice(headClose.index);
+      }
+      // Fall back to after <head> opener.
+      const headOpen = source.match(/<head[^>]*>/i);
+      if (headOpen && headOpen.index !== undefined) {
+        const after = headOpen.index + headOpen[0].length;
+        return source.slice(0, after) + '\n' + tag + source.slice(after);
+      }
+      return null;
+    },
+
+    EXTENSION_UNUSED: (err, source) => {
+      const extName = (err.params || [])[0];
+      if (!extName) return null;
+      const lines = source.split('\n');
+      const lineIdx = (err.line || 1) - 1;
+      if (lineIdx < 0 || lineIdx >= lines.length) return null;
+      // Sanity-check: the named line really does contain the script tag
+      // for the unused extension before we drop it.
+      if (
+        lines[lineIdx].indexOf(extName) >= 0 &&
+        /<script\b/i.test(lines[lineIdx])
+      ) {
+        lines.splice(lineIdx, 1);
+        return lines.join('\n');
+      }
+      return null;
+    },
+  };
+
+  function canAutoFix(error) {
+    return !!(error && error.code && AMP_AUTO_FIXES[error.code]);
+  }
+
+  function autoFix(error, source) {
+    if (!error || !error.code) return null;
+    const handler = AMP_AUTO_FIXES[error.code];
+    if (!handler) return null;
+    try {
+      return handler(error, source);
+    } catch (e) {
+      return null;
+    }
+  }
 
   function suggestFix(error) {
     if (!error || !error.code) return null;
@@ -210,5 +345,7 @@
     validate: validate,
     looksLikeAmp4Email: looksLikeAmp4Email,
     suggestFix: suggestFix,
+    canAutoFix: canAutoFix,
+    autoFix: autoFix,
   };
 })();
