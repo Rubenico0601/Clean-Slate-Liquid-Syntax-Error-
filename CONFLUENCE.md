@@ -1,7 +1,7 @@
 # CleanSlate — CleverTap Liquid Linter & Toolkit
 
 > **One-line summary**
-> A web-based linter, builder, converter, and preview tool for CleverTap Liquid templates (LiqP 0.7.9), with **two** companion Chrome extensions that import templates straight from the CleverTap dashboard — pick the one that fits how you work.
+> A web-based linter, builder, converter, AMP4Email validator, and preview tool for CleverTap Liquid templates (LiqP 0.7.9), with **two** companion Chrome extensions that import templates straight from the CleverTap dashboard — pick the one that fits how you work.
 
 | | |
 |---|---|
@@ -17,7 +17,16 @@
 
 ## What it solves
 
-Liquid errors in CleverTap campaigns surface only at send time, often in confusing error messages that don't point at a line number. CleanSlate catches them up-front, on your laptop, before the campaign is even saved. It also bundles the small day-to-day utilities (LP→CT conversion, epoch / minutes converters, variable detection, mock-data preview) that the campaign team was previously doing by hand or by spreadsheet.
+Liquid errors in CleverTap campaigns surface only at send time, often in confusing error messages that don't point at a line number. CleanSlate catches them up-front, on your laptop, before the campaign is even saved. It also bundles the small day-to-day utilities (LP→CT conversion, epoch / minutes converters, variable detection, mock-data preview, AMP4Email validation, editor-paste cleanup) that the campaign team was previously doing by hand or by spreadsheet.
+
+## What's new since this page was first published
+
+| Added | What it means for you |
+|---|---|
+| **Tab 7 — AMP** | Full AMP4Email validation using Google's official validator, with plain-English fix guidance and one-click auto-fix for mechanical errors. AMP templates imported from the extension route here automatically. |
+| **Tab 8 — Unwrap** | Paste code copied out of the CleverTap email editor and get back a clean, renderable `.html` file you can download. |
+| **New linter rule** | Unbalanced `[` / `]` inside Liquid tags — catches `Event"foo"]` and `Event["foo"` patterns that previously slipped through. |
+| **Quieter analytics** | The side panel no longer double-counts a visit every time you click *Import current template*. |
 
 ## What's inside this page
 
@@ -28,10 +37,12 @@ Liquid errors in CleverTap campaigns surface only at send time, often in confusi
 5. [Tab 4 — Tools](#tab-4--tools)
 6. [Tab 5 — Variables](#tab-5--variables)
 7. [Tab 6 — Preview](#tab-6--preview)
-8. [Security & Privacy](#security--privacy)
-9. [Chrome extensions — pick a flavor](#chrome-extensions--pick-a-flavor)
-   - [Option A — New-tab launcher](#option-a--new-tab-launcher)
-   - [Option B — Side panel (recommended)](#option-b--side-panel-recommended)
+8. [Tab 7 — AMP](#tab-7--amp-amp4email-validator)
+9. [Tab 8 — Unwrap](#tab-8--unwrap)
+10. [Security & Privacy](#security--privacy)
+11. [Chrome extensions — pick a flavor](#chrome-extensions--pick-a-flavor)
+    - [Option A — New-tab launcher](#option-a--new-tab-launcher)
+    - [Option B — Side panel (recommended)](#option-b--side-panel-recommended)
 
 ---
 
@@ -62,6 +73,7 @@ The main feature. Paste any HTML / Liquid template into the editor on the left; 
 - Unknown tags or filters not supported by CleverTap's LiqP 0.7.9 engine
 - Quoted vs. unquoted `now` in date filters (CleverTap-specific gotcha)
 - Mismatched bracket notation in `Profile` / `Event` / `Linked` references
+- **Unbalanced `[` / `]` inside a Liquid tag** — e.g. a missing opening bracket (`Event"Product Viewed"]`) or a missing closing one (`Event["Product Viewed"`). String literals are ignored while counting, so a `]` inside a quoted value doesn't cause a false positive. The orphan-close case gets a targeted suggestion (`Event["Product Viewed"]`); anything else reports the imbalance count.
 
 **Right-side Properties panel**
 - Shows campaign-level properties detected from the template (Profile attributes, Event keys, Linked tokens).
@@ -161,6 +173,73 @@ Render the template with mock data to see what subscribers would actually receiv
 
 ---
 
+## Tab 7 — AMP (AMP4Email validator)
+
+Validates AMP4Email templates against the **official AMP validator** — the same engine behind validator.ampproject.org and the one Gmail uses to decide whether your AMP email renders at all. Paste the template on the left; errors and warnings appear on the right with line and column numbers.
+
+**Why it's a separate tab**
+The Liquid linter would flag every `<amp-img>`, `<amp-carousel>`, and `<amp-form>` as an unknown tag, which is noise when the template is genuinely AMP. The AMP tab runs the AMP rules instead. If you import a template via the Chrome extension and it looks like AMP4Email, CleanSlate detects that and **routes it into this tab automatically**, with a toast telling you it did so.
+
+**What each error row gives you**
+
+| Element | What it does |
+|---|---|
+| Line / column | Click the row to jump the cursor straight to that spot in the editor |
+| Validator message | The official AMP error text |
+| **Suggested fix** | Plain-English guidance written for email developers, covering ~35 of the most common AMP4Email error codes (disallowed tags and attributes, inline `style` attributes, missing extension scripts, CSS restrictions, layout attributes, `http://` URLs, the 75 KB `<style amp-custom>` cap, boilerplate that's missing, and more). Uncovered codes fall back to the validator's own message plus the Spec link. |
+| **Fix** button | One-click auto-fix — appears only where the correction is mechanical and needs no judgment call (see below) |
+| **Spec** button | Opens the AMP spec page for that exact rule |
+
+**What the Fix button will do automatically**
+
+| Error code | Auto-fix applied |
+|---|---|
+| `DISALLOWED_ATTR` | Strips the offending attribute from that line |
+| `DUPLICATE_ATTRIBUTE` | Removes the second occurrence only |
+| `INVALID_URL_PROTOCOL` | Rewrites `http://` → `https://` on that line |
+| `MISSING_REQUIRED_EXTENSION` | Inserts the correct `<script async custom-element="amp-…">` before `</head>` (and won't double-insert if it's already there) |
+| `EXTENSION_UNUSED` | Deletes the unused extension `<script>` line, after confirming the line really is that script tag |
+
+Everything else stays suggestion-only on purpose — where a fix means choosing which value to keep or where to move content, that call is yours. Validation re-runs automatically after each fix, so the list shrinks as you work.
+
+The status badge in the panel header shows a live count: **PASS**, *n* errors, or *n* warnings.
+
+> 📷 **Screenshots to add (AMP tab — three total):**
+> 1. AMP tab with a valid AMP4Email template loaded — green **PASS** badge.
+> 2. AMP tab with a broken template — error list showing line numbers, a **Suggested fix** block, and the **Fix** / **Spec** buttons on a row.
+> 3. The import toast reading "Detected AMP4Email — routed to the AMP tab" after an extension import.
+
+---
+
+## Tab 8 — Unwrap
+
+**The problem.** When you copy HTML out of the CleverTap email editor and save it as a `.html` file, it doesn't render — you open it in a browser and see the code itself instead of the email. That's because the copy wraps every source line in `<p class="p1">` tags, escapes the markup (`&lt;table&gt;`), and turns tabs into `<span class="Apple-tab-span">`. On top of that, CKEditor hides the Outlook fallbacks as URL-encoded `<!--{cke_protected}{C}%3C!%2D%2D…-->` blocks.
+
+**The fix.** Paste that copy into the Unwrap tab. It rebuilds the real source, and you get a downloadable `.html` file that opens and renders as the actual email. A real 118 KB paste comes out at 17 KB.
+
+**Options (left of the Unwrap button)**
+
+| Option | What it does |
+|---|---|
+| **Editor-protected comments** | *Restore* (default) decodes the hidden blocks back into real `<!--[if mso]>` conditional comments and `<meta>` tags — keeps the Outlook fallbacks, including the VML rounded-button. *Remove* deletes them for a smaller browser-only file. *Leave as-is* keeps them encoded. |
+| **Strip editor-only markup** | Off by default. Removes `data-bee-*` attributes, the `tinyMce-placeholder` class, and `<code data-bee-type="speciallink">` wrappers. Off by default because unwrapping the `<code>` changes the DOM structure. |
+| **Repair broken characters** | On by default. Fixes UTF-8-read-as-Latin-1 mojibake (`PiÃ±ata` → `Piñata`, `â€™` → `’`). Only fires when that pattern is actually present. |
+| **Add doctype** | On by default. The editor's copy starts at `<html>`, which puts browsers in quirks mode; this prepends `<!DOCTYPE html>`. |
+
+**Output panel**
+- **Code / Preview** toggle — Preview renders the result in a sandboxed frame so you can confirm it looks right before downloading.
+- A summary underneath lists exactly what was changed (blocks decoded, doctype added, size in → size out).
+- **Copy** puts the result on your clipboard; **Download** saves it with the filename you type in the box (defaults to `email.html`).
+
+Cleaning runs as you type, so most of the time you just paste and hit Download.
+
+> 📷 **Screenshots to add (Unwrap tab — three total):**
+> 1. Unwrap tab with a raw CleverTap paste on the left (visible `<p class="p1">` / `Apple-tab-span` lines) and clean HTML on the right.
+> 2. The summary strip close-up — "Unwrapped the editor's rich-text paste", "Decoded 7 protected blocks", "118.5 KB in → 17.4 KB out".
+> 3. **Preview** toggle active — the rendered email showing in the right pane.
+
+---
+
 # Security & Privacy
 
 > **TL;DR — Templates pasted into CleanSlate (or imported via the Chrome extension) never leave your browser. The tool reports anonymous usage events (feature clicks, surface tags, error counts — **never** template content) to CleverTap's own analytics so the team can see how the tool is being used internally. All linting, conversion, and rendering still happens locally inside the open browser tab.**
@@ -192,13 +271,22 @@ To help the internal team understand how the tool is being used (and prioritise 
 | `Tool Visited` | `surface` (one of: `direct`, `new_tab_extension`, `side_panel`), `panel_mode` (true/false) — fires on every load |
 | `Side Panel Opened` | (no extra props — fires alongside `Tool Visited` when surface is `side_panel`) |
 | `New Tab Extension Opened` | (no extra props — fires alongside `Tool Visited` when surface is `new_tab_extension`) |
-| `Template Imported` | `source` (`selection`, `sidepanel`, `fallback`, …), `size_kb` (number), `was_unwrapped` (true/false) |
+| `Template Imported` | `source` (`selection`, `sidepanel`, `fallback`, …), `size_kb` (number), `was_unwrapped` (true/false), `format` (`liquid` or `amp4email`) |
 | `Sample Loaded` | `kind` (`valid` or `broken`) |
 | `Format Clicked` | `size_kb` (number) |
 | `LP To CT Conversion Clicked` | (no properties) |
-| `Tab Switched` | `tab` (one of: `linter`, `builder`, `reference`, `tools`, `variables`, `preview`) |
+| `Tab Switched` | `tab` (one of: `linter`, `builder`, `reference`, `tools`, `variables`, `preview`, `amp`, `unwrap`) |
 | `Fix Applied` | `severity` (`error` / `warning`), `fix_type` (e.g. `decode_html_entities`) |
 | `Side Panel Apply Clicked` | `severity` |
+| `AMP Validated` | `status` (`PASS` / `FAIL`), `errors` (count), `warnings` (count) |
+| `AMP Fix Applied` | `code` (AMP error code, e.g. `DISALLOWED_ATTR`), `severity` |
+| `AMP Fix Failed` | `code` |
+| `HTML Unwrapped` | `trigger` (`auto` / `button`), `unwrapped` (true/false), `protected_restored` (count), `protected_removed` (count), `size_kb` (number) |
+| `Unwrapped HTML Copied` / `Previewed` / `Downloaded` | `size_kb` on Downloaded; the other two have no properties |
+
+Note on counts: AMP error *codes* (e.g. `DISALLOWED_ATTR`) are sent, but never the error text or the tag/attribute values from your template — those live in the error's params, which are not captured.
+
+**Duplicate-visit suppression:** clicking *Import current template* in the side panel reloads the panel iframe, which would otherwise re-fire `Tool Visited` and `Side Panel Opened` on every import. Both are suppressed on that reload path — `Template Imported` is the event that represents what you actually did. Direct visits and new-tab extension opens always count as genuine new sessions.
 
 **What is NOT sent:**
 
@@ -233,6 +321,7 @@ For completeness, here is what the page legitimately loads from third parties, s
 |---|---|---|---|
 | CodeMirror (editor) | `cdnjs.cloudflare.com` | Standard code editor used in the linter pane | Your IP and that you visited the site. **Cannot see template content** — template content is generated in your browser after the script loads. |
 | LiquidJS (rendering engine) | `cdn.jsdelivr.net` | Powers the Preview tab's rendering | Same as above — IP only, no template content. |
+| AMP validator (WASM) | `cdn.ampproject.org` | Powers the AMP tab — Google's official AMP4Email validator, downloaded on first use of that tab only | Your IP and that you loaded the validator. **Cannot see template content** — it is a WebAssembly module that runs *inside your browser*; your template is passed to a local function call, not uploaded to Google. |
 | Google Fonts | `fonts.googleapis.com`, `fonts.gstatic.com` | Inter and JetBrains Mono fonts for the UI | Your IP only. No template content. |
 | GitHub Pages hosting | `rubenico0601.github.io` | Serves the static HTML/JS/CSS | Standard web-server access logs (IP, URL, user-agent). **No template content** — templates are never sent in any HTTP request. |
 | CleverTap Web SDK | `clevertap.com` (internal CT analytics project) | Counts anonymous usage events — see *Anonymous usage analytics* above | Event names (`Tool Visited`, `Fix Applied`, etc.) and non-content properties (surface, size in KB, severity). IP is suppressed (`useIP: false`). **Never** template content. |
@@ -259,6 +348,12 @@ No. It reads the current page's editor on click and either opens a new tab or pi
 **Q: What does the tool report back to CleverTap analytics, then?**
 Only anonymous usage events — *that* you visited and *which buttons you clicked*. See the *Anonymous usage analytics* section above for the full event list. Template content, error messages with template snippets, your email, and your IP are explicitly not captured.
 
+**Q: Does the AMP tab send my template to Google?**
+No. The AMP tab downloads Google's official validator as a WebAssembly module (the same one validator.ampproject.org uses) and then runs it locally in your tab. `cdn.ampproject.org` sees that you downloaded the validator — the same way it sees you downloaded a font — and nothing else. Your AMP template is passed to a JavaScript function inside your own browser. There is no upload step.
+
+**Q: Does anything I paste into the Unwrap tab get uploaded?**
+No. It's pure string and DOM work in your browser, same as every other tab. The Download button builds the file locally from a Blob — no server round-trip. The Preview toggle renders into a sandboxed `<iframe>`, which also blocks any scripts that might be inside a template.
+
 **Q: Is the template visible in browser history?**
 The extension passes templates via the URL hash for the hand-off. The site scrubs the hash immediately after import via `history.replaceState`, so it does not persist in browser history.
 
@@ -277,7 +372,7 @@ There are two Chrome extensions available. Both pull the template straight from 
 | | **Option A — New tab** | **Option B — Side panel** |
 |---|---|---|
 | Where the linter opens | A fresh Chrome tab next to the dashboard | A panel pinned to the right edge of the dashboard tab |
-| Best for | Full editing — using the Builder, Reference, Tools, Variables, and Preview tabs | Quick error triage and fixing — staying in flow on the dashboard |
+| Best for | Full editing — using the Builder, Reference, Tools, Variables, Preview, AMP, and Unwrap tabs | Quick error triage and fixing — staying in flow on the dashboard |
 | Workflow | Click icon → switch to the new tab → see everything | Click icon → panel slides in → errors appear inline, no tab switch |
 | Direct write-back to BEE | No — copy fixes manually | **Yes** — click "Apply to dashboard" and the BEE editor updates in place |
 | Browser support | Any Chromium browser (Chrome, Edge, Brave, Arc, Opera) | Chrome 114+. Other Chromium browsers fall back to a new-tab open. |
@@ -449,7 +544,7 @@ Same as Option A:
    - `cleanslate-sidepanel-extension.zip` (side panel)
 5. Link each zip in the corresponding **"What you'll be downloading"** section so colleagues can download whichever flavor they want directly from this doc.
 
-**Total screenshots needed: 25**
+**Total screenshots needed: 31**
 
 | Section | Count |
 |---|---|
@@ -460,6 +555,8 @@ Same as Option A:
 | Tools tab | 2 |
 | Variables tab | 2 |
 | Preview tab | 2 |
+| AMP tab | 3 |
+| Unwrap tab | 3 |
 | Option A — install | 3 |
 | Option A — usage | 2 |
 | Option B — install | 3 |
