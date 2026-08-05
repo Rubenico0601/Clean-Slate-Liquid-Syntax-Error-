@@ -213,6 +213,9 @@ Today is {{ greeting }}.
     // Preview
     initPreview();
 
+    // Unwrap
+    initUnwrap();
+
     // Pre-fill from URL hash (used by the CleanSlate Chrome extension
     // to hand off a template extracted from the CleverTap dashboard).
     importTemplateFromUrlHash();
@@ -1311,6 +1314,171 @@ Welcome {{ Profile.first_name }} — your playlist starts with {{ playData.playC
 
       errorsBody.appendChild(row);
       enhanceRowForPanelMode(row, d);
+    });
+  }
+
+  // ─── Unwrap Tab ───────────────────────────────────────────
+  // Paste from the CleverTap email editor → plain renderable HTML file.
+  function initUnwrap() {
+    const input = document.getElementById('unwrap-input');
+    const output = document.getElementById('unwrap-output');
+    const preview = document.getElementById('unwrap-preview');
+    const summary = document.getElementById('unwrap-summary');
+    const filename = document.getElementById('unwrap-filename');
+    const protectedSel = document.getElementById('unwrap-protected');
+    const stripEditor = document.getElementById('unwrap-strip-editor');
+    const fixMojibake = document.getElementById('unwrap-fix-mojibake');
+    const addDoctype = document.getElementById('unwrap-add-doctype');
+    const codeBtn = document.getElementById('btn-unwrap-view-code');
+    const previewBtn = document.getElementById('btn-unwrap-view-preview');
+    if (!input || !window.HtmlUnwrapper) return;
+
+    const outPane = output.parentElement;
+    let cleanTimeout;
+    let lastHtml = '';
+
+    function currentOptions() {
+      return {
+        protectedMode: protectedSel.value,
+        stripEditorMarkup: stripEditor.checked,
+        fixMojibake: fixMojibake.checked,
+        addDoctype: addDoctype.checked,
+      };
+    }
+
+    function renderSummary(stats, hadInput) {
+      if (!hadInput) {
+        summary.innerHTML = '<div class="unwrap-summary-empty">Nothing unwrapped yet.</div>';
+        return;
+      }
+
+      const rows = [];
+      if (stats.unwrapped) {
+        rows.push('Unwrapped the editor&rsquo;s rich-text paste &mdash; markup is real HTML again');
+      } else {
+        rows.push('Input already looked like raw HTML &mdash; no unwrapping needed');
+      }
+      if (stats.protectedRestored) {
+        rows.push('Decoded ' + stats.protectedRestored + ' protected block' +
+          (stats.protectedRestored === 1 ? '' : 's') + ' back into Outlook/meta markup');
+      }
+      if (stats.protectedRemoved) {
+        rows.push('Removed ' + stats.protectedRemoved + ' protected block' +
+          (stats.protectedRemoved === 1 ? '' : 's'));
+      }
+      if (stats.editorMarkupRemoved) {
+        rows.push('Stripped ' + stats.editorMarkupRemoved + ' editor-only attribute/wrapper' +
+          (stats.editorMarkupRemoved === 1 ? '' : 's'));
+      }
+      if (stats.mojibakeFixed) {
+        rows.push('Repaired mis-encoded characters (Pi&Atilde;&plusmn;ata &rarr; Pi&ntilde;ata)');
+      }
+      if (stats.doctypeAdded) {
+        rows.push('Added a <code>&lt;!DOCTYPE html&gt;</code> so browsers render in standards mode');
+      }
+
+      const before = (stats.bytesBefore / 1024).toFixed(1);
+      const after = (stats.bytesAfter / 1024).toFixed(1);
+      const sizeRow = '<div class="unwrap-summary-row muted"><span class="unwrap-summary-mark">&#8226;</span>' +
+        '<span>' + before + ' KB in &rarr; ' + after + ' KB out</span></div>';
+
+      summary.innerHTML = rows.map(function (r) {
+        return '<div class="unwrap-summary-row"><span class="unwrap-summary-mark">&#10003;</span><span>' + r + '</span></div>';
+      }).join('') + sizeRow;
+    }
+
+    function run(fromButton) {
+      const raw = input.value;
+      if (!raw.trim()) {
+        lastHtml = '';
+        output.value = '';
+        preview.removeAttribute('srcdoc');
+        renderSummary(null, false);
+        return;
+      }
+      const result = window.HtmlUnwrapper.unwrap(raw, currentOptions());
+      lastHtml = result.html;
+      output.value = result.html;
+      if (outPane.classList.contains('show-preview')) {
+        preview.srcdoc = result.html;
+      }
+      renderSummary(result.stats, true);
+      track('HTML Unwrapped', {
+        trigger: fromButton ? 'button' : 'auto',
+        unwrapped: result.stats.unwrapped,
+        protected_restored: result.stats.protectedRestored,
+        protected_removed: result.stats.protectedRemoved,
+        size_kb: +(result.stats.bytesBefore / 1024).toFixed(1),
+      });
+    }
+
+    function scheduleRun() {
+      clearTimeout(cleanTimeout);
+      cleanTimeout = setTimeout(function () { run(false); }, 350);
+    }
+
+    input.addEventListener('input', scheduleRun);
+    [protectedSel, stripEditor, fixMojibake, addDoctype].forEach(function (el) {
+      el.addEventListener('change', function () { run(false); });
+    });
+
+    document.getElementById('btn-unwrap-run').addEventListener('click', function () {
+      clearTimeout(cleanTimeout);
+      run(true);
+    });
+
+    document.getElementById('btn-unwrap-clear').addEventListener('click', function () {
+      input.value = '';
+      run(false);
+      input.focus();
+    });
+
+    // Code / Preview toggle
+    function setView(view) {
+      const showPreview = view === 'preview';
+      outPane.classList.toggle('show-preview', showPreview);
+      previewBtn.classList.toggle('active', showPreview);
+      codeBtn.classList.toggle('active', !showPreview);
+      if (showPreview) {
+        preview.srcdoc = lastHtml || '<p style="font-family:sans-serif;color:#888;padding:16px">Nothing to preview yet.</p>';
+      }
+    }
+    codeBtn.addEventListener('click', function () { setView('code'); });
+    previewBtn.addEventListener('click', function () {
+      setView('preview');
+      track('Unwrapped HTML Previewed');
+    });
+
+    // Copy
+    document.getElementById('btn-unwrap-copy').addEventListener('click', function () {
+      if (!lastHtml) return;
+      const btn = document.getElementById('btn-unwrap-copy');
+      navigator.clipboard.writeText(lastHtml).then(function () {
+        const original = btn.textContent;
+        btn.textContent = 'Copied';
+        setTimeout(function () { btn.textContent = original; }, 1500);
+        track('Unwrapped HTML Copied');
+      }).catch(function () {
+        output.select();
+        document.execCommand('copy');
+      });
+    });
+
+    // Download
+    document.getElementById('btn-unwrap-download').addEventListener('click', function () {
+      if (!lastHtml) return;
+      let name = (filename.value || 'email').trim().replace(/[\\/:*?"<>|]/g, '-');
+      if (!/\.html?$/i.test(name)) name += '.html';
+      const blob = new Blob([lastHtml], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      track('Unwrapped HTML Downloaded', { size_kb: +(lastHtml.length / 1024).toFixed(1) });
     });
   }
 

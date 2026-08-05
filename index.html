@@ -81,6 +81,9 @@
       <button class="tab-btn" data-tab="amp">
         <span class="tab-icon">&#9889;</span> AMP
       </button>
+      <button class="tab-btn" data-tab="unwrap">
+        <span class="tab-icon">&#9851;</span> Unwrap
+      </button>
     </nav>
 
     <!-- ═══ Tab: Linter ═══════════════════════════════════ -->
@@ -573,6 +576,74 @@ Hello, {{ name }}!</pre>
 
     </main>
 
+    <!-- ═══ Tab: Unwrap ═══════════════════════════════════ -->
+    <main class="tab-content" id="tab-unwrap">
+
+      <!-- Paste -->
+      <section class="editor-panel unwrap-panel">
+        <div class="panel-header">
+          <span class="panel-title">CleverTap Paste</span>
+          <span>Paste the code copied out of the CleverTap email editor</span>
+        </div>
+        <div class="unwrap-pane">
+          <textarea id="unwrap-input" class="unwrap-textarea" spellcheck="false"
+            placeholder="Paste here — the editor wraps every line in &lt;p&gt; tags and escapes the markup, so the file renders as code instead of as the email. This strips that back out."></textarea>
+        </div>
+        <div class="unwrap-bar">
+          <div class="unwrap-opts">
+            <label class="unwrap-opt" for="unwrap-protected">
+              Editor-protected comments
+              <select class="builder-select unwrap-select" id="unwrap-protected">
+                <option value="restore">Restore (Outlook fallbacks)</option>
+                <option value="remove">Remove</option>
+                <option value="keep">Leave as-is</option>
+              </select>
+            </label>
+            <label class="unwrap-opt">
+              <input type="checkbox" id="unwrap-strip-editor" /> Strip editor-only markup
+            </label>
+            <label class="unwrap-opt">
+              <input type="checkbox" id="unwrap-fix-mojibake" checked /> Repair broken characters
+            </label>
+            <label class="unwrap-opt">
+              <input type="checkbox" id="unwrap-add-doctype" checked /> Add doctype
+            </label>
+          </div>
+          <div class="unwrap-bar-actions">
+            <button class="btn" id="btn-unwrap-clear">Clear</button>
+            <button class="btn btn-accent" id="btn-unwrap-run">Unwrap</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Result -->
+      <aside class="results-panel unwrap-results">
+        <div class="panel-header">
+          <span class="panel-title">Unwrapped HTML</span>
+          <span class="unwrap-view-toggle">
+            <button class="btn active" id="btn-unwrap-view-code" data-view="code">Code</button>
+            <button class="btn" id="btn-unwrap-view-preview" data-view="preview">Preview</button>
+          </span>
+        </div>
+        <div class="unwrap-pane">
+          <textarea id="unwrap-output" class="unwrap-textarea" spellcheck="false" readonly
+            placeholder="The unwrapped file appears here."></textarea>
+          <iframe id="unwrap-preview" class="unwrap-preview" sandbox="" title="Unwrapped email preview"></iframe>
+        </div>
+        <div class="unwrap-summary" id="unwrap-summary">
+          <div class="unwrap-summary-empty">Nothing unwrapped yet.</div>
+        </div>
+        <div class="unwrap-bar">
+          <input class="builder-input unwrap-filename" id="unwrap-filename" type="text" value="email.html" aria-label="File name" />
+          <div class="unwrap-bar-actions">
+            <button class="btn" id="btn-unwrap-copy">Copy</button>
+            <button class="btn btn-accent" id="btn-unwrap-download">Download</button>
+          </div>
+        </div>
+      </aside>
+
+    </main>
+
   </div>
 
   <!-- CodeMirror JS -->
@@ -690,6 +761,7 @@ Hello, {{ name }}!</pre>
   <script src="js/analytics.js"></script>
   <script src="js/amp-validator.js"></script>
   <script src="js/liquid-linter.js"></script>
+  <script src="js/html-unwrapper.js"></script>
   <script src="js/leanplum-converter.js"></script>
   <script src="js/liquid-builder.js"></script>
   <script src="js/variable-inspector.js"></script>
