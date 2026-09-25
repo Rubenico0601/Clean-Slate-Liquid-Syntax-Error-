@@ -50,11 +50,30 @@
       </div>
 
       <div class="header-right" id="linter-actions">
-        <button class="btn btn-convert" id="btn-convert" title="Convert Leanplum Jinja2 syntax to CleverTap LiqP syntax">LP &rarr; CT</button>
-        <button class="btn" id="btn-format" title="Pretty-print HTML and put each block-level Liquid tag on its own line">Format</button>
-        <button class="btn" id="btn-sample">Valid Sample</button>
-        <button class="btn btn-danger" id="btn-broken-sample">Broken Sample</button>
-        <button class="btn" id="btn-clear">Clear</button>
+        <div class="menu-wrap" id="actions-menu-wrap">
+          <button class="btn btn-icon" id="actions-menu-btn" title="Template actions" aria-haspopup="true" aria-expanded="false">
+            Actions <span class="menu-caret">&#9662;</span>
+          </button>
+          <div class="menu-dropdown" id="actions-menu-dropdown" hidden>
+            <button class="menu-item menu-item-convert" id="btn-convert" title="Convert Leanplum Jinja2 syntax to CleverTap LiqP syntax">
+              <span>LP &rarr; CT</span><small>Convert Leanplum syntax</small>
+            </button>
+            <button class="menu-item" id="btn-format" title="Pretty-print HTML and put each block-level Liquid tag on its own line">
+              <span>Format</span><small>Pretty-print the template</small>
+            </button>
+            <div class="menu-divider"></div>
+            <button class="menu-item" id="btn-sample">
+              <span>Valid Sample</span><small>Load a working example</small>
+            </button>
+            <button class="menu-item menu-item-danger" id="btn-broken-sample">
+              <span>Broken Sample</span><small>Load an example full of errors</small>
+            </button>
+            <div class="menu-divider"></div>
+            <button class="menu-item" id="btn-clear">
+              <span>Clear</span><small>Empty the editor</small>
+            </button>
+          </div>
+        </div>
       </div>
     </header>
 
@@ -117,71 +136,75 @@
           </div>
         </section>
 
-        <!-- Properties Panel -->
-        <section class="properties-section" id="props-panel">
-          <div class="panel-header">
-            <span class="panel-title">Properties Used</span>
-            <button class="btn" id="props-toggle">Hide Properties</button>
+        <!-- Inspector: Properties Used / Linked Content Setup -->
+        <section class="inspector-section">
+          <div class="inspector-tabs">
+            <button class="inspector-tab active" data-inspector-tab="properties" id="inspector-tab-properties">
+              Properties Used
+              <span class="inspector-tab-badge" id="props-tab-badge" hidden>0</span>
+            </button>
+            <button class="inspector-tab" data-inspector-tab="linked" id="inspector-tab-linked">
+              Linked Content
+              <span class="inspector-tab-dot" id="linked-tab-dot" title="Linked Content validation is configured" hidden></span>
+            </button>
           </div>
-          <div class="props-content" id="props-body">
-            <div class="props-empty">No Profile or Event properties detected in the template.</div>
-          </div>
-        </section>
 
-        <!-- Linked Content Setup -->
-        <section class="linked-section collapsed" id="linked-panel">
-          <div class="panel-header">
-            <span class="panel-title">Linked Content Setup</span>
-            <button class="btn" id="linked-toggle">Show</button>
+          <div class="inspector-panel active" id="inspector-panel-properties">
+            <div class="props-content" id="props-body">
+              <div class="props-empty">No Profile or Event properties detected in the template.</div>
+            </div>
           </div>
-          <div class="linked-content" id="linked-body">
-            <p class="linked-hint">
-              The linter can't see your CleverTap dashboard, so it can't know how your
-              <strong>Linked Content</strong> labels are configured. Fetch or paste a sample
-              response below and Custom Labels are generated for you automatically &mdash; edit,
-              remove, or add to them as needed. The linter will then also flag
-              <code>Linked.*</code> references that don't match a real label or field &mdash; not
-              just Liquid syntax errors.
-            </p>
 
-            <div class="linked-field-group">
-              <label class="builder-field-label" for="linked-endpoint">Linked Content Endpoint (optional)</label>
-              <div class="linked-input-row">
-                <input class="builder-input" id="linked-endpoint" type="url" placeholder="https://api.example.com/products" />
-                <button class="btn" id="linked-fetch">Try Fetch</button>
+          <div class="inspector-panel" id="inspector-panel-linked">
+            <div class="linked-content" id="linked-body">
+              <p class="linked-hint">
+                The linter can't see your CleverTap dashboard, so it can't know how your
+                <strong>Linked Content</strong> labels are configured. Fetch or paste a sample
+                response below and Custom Labels are generated for you automatically &mdash; edit,
+                remove, or add to them as needed. The linter will then also flag
+                <code>Linked.*</code> references that don't match a real label or field &mdash; not
+                just Liquid syntax errors.
+              </p>
+
+              <div class="linked-field-group">
+                <label class="builder-field-label" for="linked-endpoint">Linked Content Endpoint (optional)</label>
+                <div class="linked-input-row">
+                  <input class="builder-input" id="linked-endpoint" type="url" placeholder="https://api.example.com/products" />
+                  <button class="btn" id="linked-fetch">Try Fetch</button>
+                </div>
+                <div class="linked-status" id="linked-fetch-status"></div>
               </div>
-              <div class="linked-status" id="linked-fetch-status"></div>
-            </div>
 
-            <div class="linked-field-group">
-              <label class="builder-field-label" for="linked-sample">Sample Response (JSON)</label>
-              <textarea
-                class="builder-textarea linked-sample-textarea"
-                id="linked-sample"
-                spellcheck="false"
-                placeholder='Paste the JSON your endpoint returns, e.g. {"data": {"product1": {"name": "Widget"}}}. Copy it from the "test" preview on the dashboard&#39;s Linked Content page if a direct fetch above didn&#39;t work.'
-              ></textarea>
-              <div class="linked-status" id="linked-sample-status"></div>
-            </div>
+              <div class="linked-field-group">
+                <label class="builder-field-label" for="linked-sample">Sample Response (JSON)</label>
+                <textarea
+                  class="builder-textarea linked-sample-textarea"
+                  id="linked-sample"
+                  spellcheck="false"
+                  placeholder='Paste the JSON your endpoint returns, e.g. {"data": {"product1": {"name": "Widget"}}}. Copy it from the "test" preview on the dashboard&#39;s Linked Content page if a direct fetch above didn&#39;t work.'
+                ></textarea>
+                <div class="linked-status" id="linked-sample-status"></div>
+              </div>
 
-            <div class="linked-field-group">
-              <span class="builder-field-label">System Labels</span>
-              <table class="linked-table">
-                <tbody>
-                  <tr><td>This is a raw API response.</td><td><code>raw</code></td></tr>
-                  <tr><td>This is the raw response parsed as JSON.</td><td><code>json</code></td></tr>
-                  <tr><td>The HTTP status code (404, 401, etc).</td><td><code>http_status_code</code></td></tr>
-                  <tr><td>Response headers.</td><td><code>headers</code></td></tr>
-                </tbody>
-              </table>
-            </div>
+              <div class="linked-field-group">
+                <span class="builder-field-label">System Labels</span>
+                <table class="linked-table">
+                  <tbody>
+                    <tr><td>This is a raw API response.</td><td><code>raw</code></td></tr>
+                    <tr><td>This is the raw response parsed as JSON.</td><td><code>json</code></td></tr>
+                    <tr><td>The HTTP status code (404, 401, etc).</td><td><code>http_status_code</code></td></tr>
+                    <tr><td>Response headers.</td><td><code>headers</code></td></tr>
+                  </tbody>
+                </table>
+              </div>
 
-            <div class="linked-field-group" data-repeater="linked-custom">
-              <span class="builder-field-label">Custom Labels</span>
-              <div class="linked-custom-rows" id="linked-custom-rows"></div>
-              <div class="linked-row-actions">
-                <button class="btn" id="linked-add-row">+ Add another</button>
-                <button class="btn btn-accent" id="linked-detect-labels">Detect Labels from Sample</button>
+              <div class="linked-field-group" data-repeater="linked-custom">
+                <span class="builder-field-label">Custom Labels</span>
+                <div class="linked-custom-rows" id="linked-custom-rows"></div>
+                <div class="linked-row-actions">
+                  <button class="btn" id="linked-add-row">+ Add another</button>
+                  <button class="btn btn-accent" id="linked-detect-labels">Detect Labels from Sample</button>
+                </div>
               </div>
             </div>
           </div>

@@ -56,12 +56,10 @@
   let sampleBtn;
   let copyBtn;
   let propsBody;
-  let propsToggle;
-  let propsPanel;
+  let propsTabBadge;
 
   // Linked Content panel state
-  let linkedPanel;
-  let linkedToggle;
+  let linkedTabDot;
   let linkedEndpointInput;
   let linkedFetchBtn;
   let linkedFetchStatus;
@@ -139,8 +137,7 @@ Today is {{ greeting }}.
     sampleBtn = document.getElementById('btn-sample');
     copyBtn = document.getElementById('btn-copy-errors');
     propsBody = document.getElementById('props-body');
-    propsToggle = document.getElementById('props-toggle');
-    propsPanel = document.getElementById('props-panel');
+    propsTabBadge = document.getElementById('props-tab-badge');
     builderOutput = document.getElementById('builder-output');
 
     // Init CodeMirror
@@ -185,11 +182,8 @@ Today is {{ greeting }}.
 
     copyBtn.addEventListener('click', copyErrors);
 
-    propsToggle.addEventListener('click', () => {
-      propsPanel.classList.toggle('collapsed');
-      propsToggle.textContent = propsPanel.classList.contains('collapsed') ? 'Show Properties' : 'Hide Properties';
-    });
-
+    initInspectorTabs();
+    initActionsMenu();
     initLinkedContent();
 
     // Converter button
@@ -1214,6 +1208,52 @@ Welcome {{ Profile.first_name }} — your playlist starts with {{ playData.playC
     });
   }
 
+  // ─── Inspector tabs (Properties Used / Linked Content) ─────
+  function initInspectorTabs() {
+    const tabs = document.querySelectorAll('.inspector-tab');
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const target = tab.dataset.inspectorTab;
+        tabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        document.querySelectorAll('.inspector-panel').forEach(p => p.classList.remove('active'));
+        document.getElementById('inspector-panel-' + target).classList.add('active');
+        track('Inspector Tab Switched', { tab: target });
+      });
+    });
+  }
+
+  // ─── Header actions menu (overflow dropdown) ────────────────
+  function initActionsMenu() {
+    const menuBtn = document.getElementById('actions-menu-btn');
+    const menuDropdown = document.getElementById('actions-menu-dropdown');
+    if (!menuBtn || !menuDropdown) return;
+
+    const closeMenu = () => {
+      menuDropdown.hidden = true;
+      menuBtn.setAttribute('aria-expanded', 'false');
+    };
+
+    menuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const willOpen = menuDropdown.hidden;
+      menuDropdown.hidden = !willOpen;
+      menuBtn.setAttribute('aria-expanded', String(willOpen));
+    });
+
+    menuDropdown.addEventListener('click', (e) => {
+      if (e.target.closest('.menu-item')) closeMenu();
+    });
+
+    document.addEventListener('click', () => {
+      if (!menuDropdown.hidden) closeMenu();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !menuDropdown.hidden) closeMenu();
+    });
+  }
+
   // ─── Linked Content panel ───────────────────────────────────
   // Lets the user mirror the CleverTap dashboard's Linked Content label
   // config (System Labels + Custom Labels: Object path -> Label) and
@@ -1222,8 +1262,7 @@ Welcome {{ Profile.first_name }} — your playlist starts with {{ playData.playC
   // errors the linter otherwise has no way to see, since that mapping
   // only exists on the dashboard.
   function initLinkedContent() {
-    linkedPanel = document.getElementById('linked-panel');
-    linkedToggle = document.getElementById('linked-toggle');
+    linkedTabDot = document.getElementById('linked-tab-dot');
     linkedEndpointInput = document.getElementById('linked-endpoint');
     linkedFetchBtn = document.getElementById('linked-fetch');
     linkedFetchStatus = document.getElementById('linked-fetch-status');
@@ -1232,11 +1271,6 @@ Welcome {{ Profile.first_name }} — your playlist starts with {{ playData.playC
     linkedRowsEl = document.getElementById('linked-custom-rows');
     linkedAddRowBtn = document.getElementById('linked-add-row');
     linkedDetectBtn = document.getElementById('linked-detect-labels');
-
-    linkedToggle.addEventListener('click', () => {
-      linkedPanel.classList.toggle('collapsed');
-      linkedToggle.textContent = linkedPanel.classList.contains('collapsed') ? 'Show' : 'Hide';
-    });
 
     addLinkedRow();
 
@@ -1473,7 +1507,9 @@ Welcome {{ Profile.first_name }} — your playlist starts with {{ playData.playC
       try { sampleData = JSON.parse(sampleText); } catch (e) { /* invalid JSON — label checks still run */ }
     }
 
-    if (!hasCustom && !sampleText) return null;
+    const configured = hasCustom || !!sampleText;
+    if (linkedTabDot) linkedTabDot.hidden = !configured;
+    if (!configured) return null;
 
     return { labels, sampleData };
   }
@@ -2362,6 +2398,12 @@ Welcome {{ Profile.first_name }} — your playlist starts with {{ playData.playC
 
     const hasProfile = properties.profile.length > 0;
     const hasEvent = properties.event.length > 0;
+    const total = properties.profile.length + properties.event.length;
+
+    if (propsTabBadge) {
+      propsTabBadge.hidden = total === 0;
+      propsTabBadge.textContent = total;
+    }
 
     if (!hasProfile && !hasEvent) {
       propsBody.innerHTML = `
