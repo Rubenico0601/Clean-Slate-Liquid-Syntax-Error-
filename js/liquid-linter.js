@@ -73,10 +73,11 @@ class LiquidLinter {
     ]);
   }
 
-  lint(source) {
+  lint(source, linkedContentConfig) {
     this.diagnostics = [];
     this.source = source;
     this.lines = source.split('\n');
+    this.linkedContentConfig = linkedContentConfig || null;
 
     // Step 1: Tokenize
     const tokens = this.tokenize(source);
@@ -96,6 +97,12 @@ class LiquidLinter {
     // Step 4: CleverTap-specific checks
     if (this.clevertapMode) {
       this.checkCleverTapSyntax(tokens);
+    }
+
+    // Step 4b: Linked Content label/field checks (only when the user has
+    // configured labels and/or a sample response in the Linked Content panel)
+    if (this.linkedContentConfig) {
+      this.checkLinkedContent(tokens);
     }
 
     // Step 5: Check for stray delimiters in text
@@ -754,6 +761,131 @@ class LiquidLinter {
           'Inside tags, use `Profile.property` or `Event.property` instead.');
       }
     }
+  }
+
+  // ─── Linked Content Checks ───────────────────────────────────
+  // These only run when the caller supplies a `linkedContentConfig`
+  // (built from the Linked Content panel in the UI), so templates that
+  // don't use this feature — or whose author hasn't filled the panel in —
+  // see no change in behaviour.
+
+  checkLinkedContent(tokens) {
+    const labelDefs = this.linkedContentConfig.labels;
+    const sample = this.linkedContentConfig.sampleData;
+    if (!labelDefs) return;
+
+    const chainRe = /\bLinked((?:\.[A-Za-z_][A-Za-z0-9_]*|\[(?:"[^"]*"|'[^']*')\])+)/g;
+
+    for (const token of tokens) {
+      if (token.broken) continue;
+      const inner = token.inner;
+      if (!inner) continue;
+
+      let m;
+      chainRe.lastIndex = 0;
+      while ((m = chainRe.exec(inner))) {
+        const chain = this.parseLinkedChain(m[1]);
+        if (chain.length === 0) continue;
+        const label = chain[0];
+        const rest = chain.slice(1);
+
+        if (!labelDefs.has(label)) {
+          const known = [...labelDefs.keys()];
+          this.addDiagnostic(token.line, token.col, 'error',
+            `\`Linked.${label}\` is not a defined Linked Content label. ` +
+            'This is likely a Linked Content dashboard configuration issue, not a Liquid syntax error — ' +
+            `check the label name against your Linked Content setup on the CleverTap dashboard. ` +
+            `Configured labels: ${known.length ? known.map(k => '`' + k + '`').join(', ') : '(none configured in this panel yet)'}.`);
+          continue;
+        }
+
+        if (!sample) continue; // no sample response to verify fields against
+
+        const def = labelDefs.get(label);
+        let node;
+        if (def.kind === 'json') {
+          node = sample;
+        } else if (def.kind === 'custom') {
+          const baseChain = (def.path || '').split('.').map(s => s.trim()).filter(Boolean);
+          node = this.resolveLinkedPath(sample, baseChain);
+          if (node === undefined) {
+            this.addDiagnostic(token.line, token.col, 'error',
+              `\`Linked.${label}\` is mapped to \`${def.path}\`, but that path was not found in the sample Linked Content response. ` +
+              'Check the Object path in your Linked Content label mapping, or refresh the sample response.');
+            continue;
+          }
+        } else {
+          // raw / http_status_code: plain values with no sub-fields.
+          // headers: an object we don't have real sample data for, so we
+          // don't attempt to verify anything under it.
+          if (rest.length > 0 && def.kind !== 'headers') {
+            this.addDiagnostic(token.line, token.col, 'error',
+              `\`Linked.${chain.join('.')}\` — \`Linked.${label}\` is a plain value and has no \`${rest.join('.')}\` field.`);
+          }
+          continue;
+        }
+
+        this.walkLinkedChain(token, chain, label, rest, node);
+      }
+    }
+  }
+
+  walkLinkedChain(token, chain, label, rest, node) {
+    let cursor = node;
+    for (let i = 0; i < rest.length; i++) {
+      const key = rest[i];
+      if (cursor === null || cursor === undefined || typeof cursor !== 'object') {
+        this.addDiagnostic(token.line, token.col, 'error',
+          `\`Linked.${chain.join('.')}\` goes too deep — \`Linked.${chain.slice(0, i + 1).join('.')}\` ` +
+          'is not an object or array in the sample response.');
+        return;
+      }
+      if (Array.isArray(cursor)) {
+        if (/^\d+$/.test(key)) {
+          cursor = cursor[Number(key)];
+          continue;
+        }
+        if (key === 'first') { cursor = cursor[0]; continue; }
+        if (key === 'last') { cursor = cursor[cursor.length - 1]; continue; }
+        if (key === 'size') { return; } // numeric leaf, nothing further to check
+        this.addDiagnostic(token.line, token.col, 'error',
+          `\`Linked.${chain.join('.')}\` — \`${key}\` is not a valid index on the array at ` +
+          `\`Linked.${chain.slice(0, i + 1).join('.')}\` in the sample response.`);
+        return;
+      }
+      if (!Object.prototype.hasOwnProperty.call(cursor, key)) {
+        this.addDiagnostic(token.line, token.col, 'error',
+          `\`Linked.${chain.join('.')}\` — field \`${key}\` was not found under ` +
+          `\`Linked.${chain.slice(0, i).join('.') || label}\` in the sample response.`);
+        return;
+      }
+      cursor = cursor[key];
+    }
+  }
+
+  parseLinkedChain(chainStr) {
+    const keys = [];
+    const re = /\.([A-Za-z_][A-Za-z0-9_]*)|\[(?:"([^"]*)"|'([^']*)')\]/g;
+    let m;
+    while ((m = re.exec(chainStr))) {
+      keys.push(m[1] !== undefined ? m[1] : (m[2] !== undefined ? m[2] : m[3]));
+    }
+    return keys;
+  }
+
+  resolveLinkedPath(obj, keys) {
+    let cur = obj;
+    for (const key of keys) {
+      if (cur === null || cur === undefined || typeof cur !== 'object') return undefined;
+      if (Array.isArray(cur)) {
+        if (!/^\d+$/.test(key)) return undefined;
+        cur = cur[Number(key)];
+      } else {
+        if (!Object.prototype.hasOwnProperty.call(cur, key)) return undefined;
+        cur = cur[key];
+      }
+    }
+    return cur;
   }
 
   // ─── Stray Delimiter Detection ──────────────────────────────

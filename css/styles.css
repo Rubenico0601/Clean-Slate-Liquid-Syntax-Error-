@@ -588,6 +588,138 @@ main.tab-content.active {
 
 .props-warning-icon { font-size: 13px; flex-shrink: 0; padding-top: 1px; }
 
+/* ─── Linked Content Panel ────────────────────────────── */
+.linked-section {
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.linked-content {
+  max-height: 520px;
+  overflow-y: auto;
+  padding: 12px;
+  transition: max-height 0.2s ease;
+}
+
+.linked-content::-webkit-scrollbar { width: 6px; }
+.linked-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+.linked-section.collapsed .linked-content {
+  max-height: 0;
+  padding: 0 12px;
+  overflow: hidden;
+}
+
+.linked-hint {
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  margin: 0 0 14px;
+}
+
+.linked-hint code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--bg-tertiary);
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--ct-blue);
+}
+
+.linked-field-group { margin-bottom: 16px; }
+.linked-field-group:last-child { margin-bottom: 0; }
+
+.linked-input-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 5px;
+}
+
+.linked-input-row .builder-input { flex: 1; min-width: 0; }
+
+.linked-sample-textarea {
+  margin-top: 5px;
+  width: 100%;
+  min-height: 100px;
+  resize: vertical;
+}
+
+.linked-status {
+  font-size: 11px;
+  line-height: 1.5;
+  margin-top: 6px;
+}
+
+.linked-status.status-error { color: var(--error-red); }
+.linked-status.status-success { color: var(--success-green); }
+.linked-status.status-warn { color: var(--warn-yellow); }
+.linked-status.status-info { color: var(--text-muted); }
+
+.linked-table {
+  width: 100%;
+  margin-top: 5px;
+  font-size: 11px;
+  border-collapse: collapse;
+}
+
+.linked-table td {
+  padding: 5px 6px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+  vertical-align: top;
+}
+
+.linked-table td:last-child {
+  white-space: nowrap;
+  text-align: right;
+  color: var(--text-primary);
+}
+
+.linked-table code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--bg-tertiary);
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--ct-blue);
+}
+
+.linked-custom-rows { margin-top: 5px; }
+
+.linked-row-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.linked-custom-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.linked-custom-row .builder-input { flex: 1; min-width: 0; }
+
+.linked-row-remove {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 15px;
+  padding: 4px 6px;
+  border-radius: 3px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.linked-row-remove:hover {
+  color: var(--error-red);
+  background: var(--error-red-bg);
+}
+
 /* ─── CodeMirror Search Dialog ────────────────────────── */
 .CodeMirror-dialog {
   background: var(--bg-tertiary);

@@ -128,6 +128,65 @@
           </div>
         </section>
 
+        <!-- Linked Content Setup -->
+        <section class="linked-section collapsed" id="linked-panel">
+          <div class="panel-header">
+            <span class="panel-title">Linked Content Setup</span>
+            <button class="btn" id="linked-toggle">Show</button>
+          </div>
+          <div class="linked-content" id="linked-body">
+            <p class="linked-hint">
+              The linter can't see your CleverTap dashboard, so it can't know how your
+              <strong>Linked Content</strong> labels are configured. Fetch or paste a sample
+              response below and Custom Labels are generated for you automatically &mdash; edit,
+              remove, or add to them as needed. The linter will then also flag
+              <code>Linked.*</code> references that don't match a real label or field &mdash; not
+              just Liquid syntax errors.
+            </p>
+
+            <div class="linked-field-group">
+              <label class="builder-field-label" for="linked-endpoint">Linked Content Endpoint (optional)</label>
+              <div class="linked-input-row">
+                <input class="builder-input" id="linked-endpoint" type="url" placeholder="https://api.example.com/products" />
+                <button class="btn" id="linked-fetch">Try Fetch</button>
+              </div>
+              <div class="linked-status" id="linked-fetch-status"></div>
+            </div>
+
+            <div class="linked-field-group">
+              <label class="builder-field-label" for="linked-sample">Sample Response (JSON)</label>
+              <textarea
+                class="builder-textarea linked-sample-textarea"
+                id="linked-sample"
+                spellcheck="false"
+                placeholder='Paste the JSON your endpoint returns, e.g. {"data": {"product1": {"name": "Widget"}}}. Copy it from the "test" preview on the dashboard&#39;s Linked Content page if a direct fetch above didn&#39;t work.'
+              ></textarea>
+              <div class="linked-status" id="linked-sample-status"></div>
+            </div>
+
+            <div class="linked-field-group">
+              <span class="builder-field-label">System Labels</span>
+              <table class="linked-table">
+                <tbody>
+                  <tr><td>This is a raw API response.</td><td><code>raw</code></td></tr>
+                  <tr><td>This is the raw response parsed as JSON.</td><td><code>json</code></td></tr>
+                  <tr><td>The HTTP status code (404, 401, etc).</td><td><code>http_status_code</code></td></tr>
+                  <tr><td>Response headers.</td><td><code>headers</code></td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="linked-field-group" data-repeater="linked-custom">
+              <span class="builder-field-label">Custom Labels</span>
+              <div class="linked-custom-rows" id="linked-custom-rows"></div>
+              <div class="linked-row-actions">
+                <button class="btn" id="linked-add-row">+ Add another</button>
+                <button class="btn btn-accent" id="linked-detect-labels">Detect Labels from Sample</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
       </aside>
     </main>
 

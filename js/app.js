@@ -59,6 +59,19 @@
   let propsToggle;
   let propsPanel;
 
+  // Linked Content panel state
+  let linkedPanel;
+  let linkedToggle;
+  let linkedEndpointInput;
+  let linkedFetchBtn;
+  let linkedFetchStatus;
+  let linkedSampleEl;
+  let linkedSampleStatus;
+  let linkedRowsEl;
+  let linkedAddRowBtn;
+  let linkedDetectBtn;
+  let linkedRowIdx = 0;
+
   // Builder state
   let currentPattern = null;
   let builderOutput;
@@ -176,6 +189,8 @@ Today is {{ greeting }}.
       propsPanel.classList.toggle('collapsed');
       propsToggle.textContent = propsPanel.classList.contains('collapsed') ? 'Show Properties' : 'Hide Properties';
     });
+
+    initLinkedContent();
 
     // Converter button
     document.getElementById('btn-convert').addEventListener('click', () => {
@@ -1199,6 +1214,275 @@ Welcome {{ Profile.first_name }} — your playlist starts with {{ playData.playC
     });
   }
 
+  // ─── Linked Content panel ───────────────────────────────────
+  // Lets the user mirror the CleverTap dashboard's Linked Content label
+  // config (System Labels + Custom Labels: Object path -> Label) and
+  // optionally a sample API response, so the linter can catch
+  // `Linked.*` references that don't match a real label or field —
+  // errors the linter otherwise has no way to see, since that mapping
+  // only exists on the dashboard.
+  function initLinkedContent() {
+    linkedPanel = document.getElementById('linked-panel');
+    linkedToggle = document.getElementById('linked-toggle');
+    linkedEndpointInput = document.getElementById('linked-endpoint');
+    linkedFetchBtn = document.getElementById('linked-fetch');
+    linkedFetchStatus = document.getElementById('linked-fetch-status');
+    linkedSampleEl = document.getElementById('linked-sample');
+    linkedSampleStatus = document.getElementById('linked-sample-status');
+    linkedRowsEl = document.getElementById('linked-custom-rows');
+    linkedAddRowBtn = document.getElementById('linked-add-row');
+    linkedDetectBtn = document.getElementById('linked-detect-labels');
+
+    linkedToggle.addEventListener('click', () => {
+      linkedPanel.classList.toggle('collapsed');
+      linkedToggle.textContent = linkedPanel.classList.contains('collapsed') ? 'Show' : 'Hide';
+    });
+
+    addLinkedRow();
+
+    linkedAddRowBtn.addEventListener('click', () => {
+      addLinkedRow();
+      track('Linked Content Row Added');
+    });
+
+    linkedSampleEl.addEventListener('input', () => {
+      updateLinkedSampleStatus();
+      scheduleRelint();
+    });
+
+    // Pasting a sample response is a deliberate, one-time action (unlike
+    // typing character by character), so auto-detect labels right away —
+    // same convenience as after a successful fetch, without doing it on
+    // every keystroke while someone is still editing the JSON by hand.
+    linkedSampleEl.addEventListener('paste', () => {
+      setTimeout(() => {
+        updateLinkedSampleStatus();
+        detectAndApplyLabels({ silent: true });
+      }, 0);
+    });
+
+    linkedEndpointInput.addEventListener('input', () => {
+      linkedFetchStatus.textContent = '';
+      linkedFetchStatus.className = 'linked-status';
+    });
+
+    linkedFetchBtn.addEventListener('click', fetchLinkedSample);
+
+    linkedDetectBtn.addEventListener('click', () => {
+      detectAndApplyLabels({ silent: false });
+    });
+  }
+
+  function addLinkedRow(pathVal, labelVal) {
+    const idx = linkedRowIdx++;
+    const row = document.createElement('div');
+    row.className = 'linked-custom-row';
+    row.dataset.idx = idx;
+    row.innerHTML = `
+      <input class="builder-input" data-linked-field="path" type="text" placeholder="data.product1" value="${escapeAttr(pathVal || '')}" />
+      <input class="builder-input" data-linked-field="label" type="text" placeholder="product1" value="${escapeAttr(labelVal || '')}" />
+      <button class="linked-row-remove" title="Remove">&times;</button>
+    `;
+    linkedRowsEl.appendChild(row);
+
+    row.querySelectorAll('input').forEach(inp => {
+      inp.addEventListener('input', scheduleRelint);
+    });
+    row.querySelector('.linked-row-remove').addEventListener('click', () => {
+      row.remove();
+      scheduleRelint();
+    });
+  }
+
+  // Turns a sample JSON response into candidate {path, label} rows, mirroring
+  // how CleverTap's own dashboard names Custom Labels. The dashboard's own
+  // convention (see its Linked Content setup screen) is a single wrapper key
+  // (typically "data") containing one child object per label, named after
+  // that child's key — e.g. `data.product1` -> label `product1`. We follow
+  // that same convention here; anything else falls back to one label per
+  // top-level key.
+  function detectLinkedLabelCandidates(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return [];
+
+    const topKeys = Object.keys(data);
+    if (topKeys.length === 1) {
+      const wrapperKey = topKeys[0];
+      const wrapperVal = data[wrapperKey];
+      if (wrapperVal && typeof wrapperVal === 'object' && !Array.isArray(wrapperVal)) {
+        const children = Object.keys(wrapperVal);
+        if (children.length > 0) {
+          return children.map(key => ({ path: `${wrapperKey}.${key}`, label: key }));
+        }
+      }
+    }
+
+    return topKeys.map(key => ({ path: key, label: key }));
+  }
+
+  // Removes custom-label rows that are still completely blank (e.g. the
+  // starter row) once real rows exist, so auto-detection doesn't leave a
+  // stray empty row sitting above the detected ones.
+  function pruneEmptyLinkedRows() {
+    const rows = [...linkedRowsEl.querySelectorAll('.linked-custom-row')];
+    const isEmpty = row =>
+      !row.querySelector('[data-linked-field="path"]').value.trim() &&
+      !row.querySelector('[data-linked-field="label"]').value.trim();
+    if (rows.every(isEmpty)) return; // keep at least one row for manual entry
+    rows.filter(isEmpty).forEach(row => row.remove());
+  }
+
+  // Parses the Sample Response box and appends any newly-detected labels as
+  // Custom Label rows (skipping paths already present). `silent` suppresses
+  // the "nothing to detect" / invalid-JSON messages for automatic triggers
+  // (paste, fetch) where updateLinkedSampleStatus() already reported on the
+  // JSON's validity; the explicit "Detect Labels" button always reports.
+  function detectAndApplyLabels(opts) {
+    const silent = !!(opts && opts.silent);
+    const text = linkedSampleEl.value.trim();
+    if (!text) {
+      if (!silent) setLinkedStatus(linkedSampleStatus, 'Paste or fetch a sample response first.', 'warn');
+      return;
+    }
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      if (!silent) setLinkedStatus(linkedSampleStatus, `Can't detect labels — sample isn't valid JSON: ${e.message}`, 'error');
+      return;
+    }
+
+    const candidates = detectLinkedLabelCandidates(data);
+    if (candidates.length === 0) {
+      if (!silent) setLinkedStatus(linkedSampleStatus, 'No object fields found to turn into labels — add labels manually below.', 'warn');
+      return;
+    }
+
+    const existingPaths = new Set(
+      [...linkedRowsEl.querySelectorAll('.linked-custom-row')]
+        .map(row => row.querySelector('[data-linked-field="path"]').value.trim())
+        .filter(Boolean)
+    );
+
+    const MAX_AUTO_LABELS = 30;
+    let added = 0;
+    for (const candidate of candidates) {
+      if (added >= MAX_AUTO_LABELS) break;
+      if (existingPaths.has(candidate.path)) continue;
+      addLinkedRow(candidate.path, candidate.label);
+      added++;
+    }
+    pruneEmptyLinkedRows();
+
+    if (added > 0) {
+      setLinkedStatus(
+        linkedSampleStatus,
+        `Detected ${added} label${added === 1 ? '' : 's'} from the sample response — review the names below, or edit/remove any you don't want.`,
+        'success'
+      );
+      scheduleRelint();
+      track('Linked Content Labels Detected', { count: added });
+    } else if (!silent) {
+      setLinkedStatus(linkedSampleStatus, 'All detected labels are already in your Custom Labels list.', 'success');
+    }
+  }
+
+  async function fetchLinkedSample() {
+    const url = linkedEndpointInput.value.trim();
+    if (!url) {
+      setLinkedStatus(linkedFetchStatus, 'Enter an endpoint URL first.', 'warn');
+      return;
+    }
+
+    setLinkedStatus(linkedFetchStatus, 'Fetching…', 'info');
+    track('Linked Content Fetch Attempted');
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      const text = await res.text();
+
+      let pretty = text;
+      try { pretty = JSON.stringify(JSON.parse(text), null, 2); } catch (e) { /* not JSON, keep raw text */ }
+      linkedSampleEl.value = pretty;
+      updateLinkedSampleStatus();
+      detectAndApplyLabels({ silent: true });
+
+      setLinkedStatus(
+        linkedFetchStatus,
+        `Fetched HTTP ${res.status}. Filled into Sample Response below — review it before relying on it.`,
+        res.ok ? 'success' : 'warn'
+      );
+      scheduleRelint();
+    } catch (e) {
+      setLinkedStatus(
+        linkedFetchStatus,
+        'Could not fetch this endpoint directly from the browser — most likely CORS, or auth headers that are only ' +
+        'configured on the CleverTap dashboard. Paste the sample response manually instead (you can copy it from the ' +
+        '"test" preview on the dashboard\'s Linked Content page).',
+        'error'
+      );
+    }
+  }
+
+  function updateLinkedSampleStatus() {
+    const text = linkedSampleEl.value.trim();
+    if (!text) {
+      linkedSampleStatus.textContent = '';
+      linkedSampleStatus.className = 'linked-status';
+      return;
+    }
+    try {
+      JSON.parse(text);
+      setLinkedStatus(linkedSampleStatus, 'Valid JSON.', 'success');
+    } catch (e) {
+      setLinkedStatus(linkedSampleStatus, `Not valid JSON: ${e.message}`, 'error');
+    }
+  }
+
+  function setLinkedStatus(el, message, kind) {
+    el.textContent = message;
+    el.className = 'linked-status' + (kind ? ' status-' + kind : '');
+  }
+
+  // Builds the config object passed to linter.lint(). Returns null when the
+  // panel hasn't been touched at all, so templates that don't use Linked
+  // Content see zero behaviour change from before this feature existed.
+  function getLinkedContentConfig() {
+    const labels = new Map();
+    labels.set('raw', { kind: 'raw' });
+    labels.set('json', { kind: 'json' });
+    labels.set('http_status_code', { kind: 'status' });
+    labels.set('headers', { kind: 'headers' });
+
+    let hasCustom = false;
+    linkedRowsEl.querySelectorAll('.linked-custom-row').forEach(row => {
+      const path = row.querySelector('[data-linked-field="path"]').value.trim();
+      const label = row.querySelector('[data-linked-field="label"]').value.trim();
+      if (label) {
+        labels.set(label, { kind: 'custom', path });
+        hasCustom = true;
+      }
+    });
+
+    const sampleText = linkedSampleEl.value.trim();
+    let sampleData = null;
+    if (sampleText) {
+      try { sampleData = JSON.parse(sampleText); } catch (e) { /* invalid JSON — label checks still run */ }
+    }
+
+    if (!hasCustom && !sampleText) return null;
+
+    return { labels, sampleData };
+  }
+
+  function scheduleRelint() {
+    clearTimeout(lintTimeout);
+    lintTimeout = setTimeout(runLint, DEBOUNCE_MS);
+  }
+
   // ─── Lint runner ───────────────────────────────────────────
   function runLint() {
     const source = editor.getValue();
@@ -1213,7 +1497,7 @@ Welcome {{ Profile.first_name }} — your playlist starts with {{ playData.playC
       return;
     }
 
-    const diagnostics = linter.lint(source);
+    const diagnostics = linter.lint(source, getLinkedContentConfig());
     lastDiagnostics = diagnostics;
     renderResults(diagnostics);
     highlightErrors(diagnostics);
@@ -2192,7 +2476,7 @@ Welcome {{ Profile.first_name }} — your playlist starts with {{ playData.playC
   function copyErrors() {
     const source = editor.getValue();
     if (!source.trim()) return;
-    const diagnostics = linter.lint(source);
+    const diagnostics = linter.lint(source, getLinkedContentConfig());
     if (diagnostics.length === 0) return;
 
     const text = diagnostics.map((d, i) =>
